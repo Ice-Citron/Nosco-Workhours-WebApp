@@ -7,7 +7,7 @@ import LoginPage from './pages/LoginPage';
 import RegistrationPage from './pages/RegistrationPage';
 import PasswordResetRequestPage from './pages/PasswordResetRequestPage';
 import ContactSupportPage from './pages/ContactSupportPage';
-import EmployeeDashboardPage from './pages/EmployeeDashboardPage';
+import WorkerDashboardPage from './pages/WorkerDashboardPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import SubmitExpensePage from './pages/SubmitExpensePage';
 import LogHoursPage from './pages/LogHoursPage';
@@ -30,8 +30,9 @@ const App = () => {
             <Route path="/password-reset" element={<PasswordResetRequestPage />} />
             <Route path="/contact-support" element={<ContactSupportPage />} />
 
-            <Route path="/dashboard" element={<ProtectedRoute requiredRole="Employee"><EmployeeDashboardPage /></ProtectedRoute>} />
-            <Route path="/admin-dashboard" element={<ProtectedRoute requiredRole="Admin"><AdminDashboardPage /></ProtectedRoute>} />
+            <Route path="/worker/dashboard" element={<WorkerDashboardPage />} />
+            <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+
             <Route path="/submit-expense" element={<ProtectedRoute requiredRole="Employee"><SubmitExpensePage /></ProtectedRoute>} />
             <Route path="/log-hours" element={<ProtectedRoute requiredRole="Employee"><LogHoursPage /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute requiredRole="Admin"><ReportsPage /></ProtectedRoute>} />

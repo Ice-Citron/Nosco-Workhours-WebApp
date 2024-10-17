@@ -1,0 +1,14 @@
+/* Add any additional styles for the dashboard here */
+.nosco-red {
+    color: #800000;
+  }
+  
+  .bg-nosco-red {
+    background-color: #800000;
+  }
+  
+  .hover\:bg-nosco-red-dark:hover {
+    background-color: #600000;
+  }
+  
+  /* Add more custom styles as needed */
