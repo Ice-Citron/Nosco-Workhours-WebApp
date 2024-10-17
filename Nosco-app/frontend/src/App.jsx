@@ -4,6 +4,8 @@ import { AuthProvider } from './context/AuthContext';
 import Header from './components/layout/Header.jsx';
 import Footer from './components/layout/Footer.jsx';
 import Sidebar from './components/layout/Sidebar.jsx';
+
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegistrationPage from './pages/RegistrationPage';
 import PasswordResetPage from './pages/PasswordResetPage';
@@ -18,6 +20,9 @@ import ErrorPage from './pages/ErrorPage';
 import LoadingPage from './pages/LoadingPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 
+
+
+
 const App = () => {
   return (
     <AuthProvider>
@@ -25,6 +30,7 @@ const App = () => {
         <Header />
         <Sidebar />
         <Routes>
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegistrationPage />} />
           <Route path="/reset-password" element={<PasswordResetPage />} />
