@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 
+
 module.exports = {
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
@@ -7,8 +8,11 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        maroon: '#800000',
-        'maroon-dark': '#600000',
+        'nosco-red': '#8B0000', // Dark red color from the original site
+        'nosco-red-light': '#A52A2A', // Lighter red for gradient
+      },
+      backgroundImage: {
+        'nosco-gradient': 'linear-gradient(to bottom, #A52A2A, #8B0000)',
       },
     },
   },

@@ -1,99 +1,82 @@
 // src/components/auth/LoginForm.jsx
-import React, { useState, useContext } from 'react';
-import { authService } from '../../services/authService';
-import { AuthContext } from '../../context/AuthContext';
-import Modal from '../common/Modal';
-import InputField from '../common/InputField';
-import Button from '../common/Button';
-import Notification from '../common/Notification';
+import React, { useState } from 'react';
+import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/solid';
+import { Link } from 'react-router-dom';
 
-const LoginForm = () => {
-  const [email, setEmail] = useState('');
+const LoginForm = ({ onSubmit, error, role }) => {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [otp, setOtp] = useState('');
-  const [showOtp, setShowOtp] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const { setCurrentUser } = useContext(AuthContext);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setError('');
-    try {
-      const user = await authService.login(email, password);
-      if (user) {
-        if (!user.emailVerified) {
-          setError('Please verify your email before logging in.');
-          return;
-        }
-        // If phone number exists, send OTP
-        if (user.phoneNumber) {
-          await authService.sendOTP(user.phoneNumber);
-          setShowOtp(true);
-        } else {
-          setCurrentUser(user);
-          // Redirect to dashboard
-          window.location.href = '/dashboard';
-        }
-      }
-    } catch (err) {
-      setError(err.message);
-    }
+    onSubmit({ username, password });
   };
 
-  const handleOtpVerify = async () => {
-    setError('');
-    try {
-      const user = await authService.verifyOTP(otp);
-      if (user) {
-        setCurrentUser(user);
-        // Redirect to dashboard
-        window.location.href = '/dashboard';
-      }
-    } catch (err) {
-      setError(err.message);
-    }
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
   };
 
   return (
-    <>
-      <form onSubmit={handleSubmit} className="auth-form">
-        <h2>Login</h2>
-        <InputField
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div>
+        <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+          Email/Username
+        </label>
+        <input
+          type="text"
+          id="username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
           required
+          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nosco-red focus:border-nosco-red"
         />
-        <InputField
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <Button type="submit">Login</Button>
-        {error && <Notification message={error} type="error" />}
-        {success && <Notification message={success} type="success" />}
-      </form>
-
-      {showOtp && (
-        <Modal title="OTP Verification">
-          <InputField
-            type="text"
-            placeholder="Enter OTP"
-            value={otp}
-            onChange={(e) => setOtp(e.target.value)}
+      </div>
+      <div>
+        <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+          Password
+        </label>
+        <div className="mt-1 relative">
+          <input
+            type={showPassword ? "text" : "password"}
+            id="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             required
+            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nosco-red focus:border-nosco-red pr-10"
           />
-          <Button onClick={handleOtpVerify}>Verify OTP</Button>
-          {error && <Notification message={error} type="error" />}
-        </Modal>
-      )}
-
-      <div id="recaptcha-container"></div>
-    </>
+          <button
+            type="button"
+            className="absolute inset-y-0 right-0 pr-3 flex items-center"
+            onClick={togglePasswordVisibility}
+          >
+            {showPassword ? (
+              <EyeSlashIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+            ) : (
+              <EyeIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+            )}
+          </button>
+        </div>
+      </div>
+      {error && <p className="text-red-600 text-sm">{error}</p>}
+      <input type="hidden" name="role" value={role} />
+      <div>
+        <button
+          type="submit"
+          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-nosco-red to-nosco-dark-red hover:from-nosco-dark-red hover:to-nosco-red focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-nosco-red"
+        >
+          Login
+        </button>
+      </div>
+      <div className="flex items-center justify-between mt-4">
+        <Link to="/password-reset" className="text-sm text-nosco-red hover:underline">
+          Forgot Password?
+        </Link>
+        <Link to="/contact-support" className="text-sm text-nosco-red hover:underline">
+          Contact Support
+        </Link>
+      </div>
+    </form>
   );
 };
 
