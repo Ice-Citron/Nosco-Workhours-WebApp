@@ -82,7 +82,7 @@ const ContactSupportForm = () => {
         <Button type="submit" disabled={loading}>
           {loading ? 'Sending...' : 'Submit'}
         </Button>
-        <Button type="button" onClick={() => navigate(-1)} variant="secondary">
+        <Button type="button" onClick={() => navigate(-1)}>
           Back
         </Button>
       </div>
