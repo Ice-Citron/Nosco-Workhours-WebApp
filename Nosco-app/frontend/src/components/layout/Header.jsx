@@ -5,7 +5,7 @@ const Header = () => {
   return (
     <header className="bg-white py-4 shadow-md">
       <div className="container mx-auto flex justify-center">
-        <Logo />
+        <Logo className="h-16 w-auto" />
       </div>
     </header>
   );

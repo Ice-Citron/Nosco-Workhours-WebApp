@@ -1,27 +1,43 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
-export const AuthContext = createContext();
-
-export const useAuth = () => useContext(AuthContext);
+const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState({ isAuthenticated: true, role: 'worker' });
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check for a logged-in user
+    const loggedInUser = localStorage.getItem('user');
+    if (loggedInUser) {
+      setUser(JSON.parse(loggedInUser));
+    }
+    setLoading(false);
+  }, []);
 
   const login = (email, password, role) => {
-    // Set user as authenticated with the given role
-    setCurrentUser({ isAuthenticated: true, role: role });
+    // Use the role passed from the login form
+    const user = { id: '1', name: 'John Doe', email, role };
+    setUser(user);
+    localStorage.setItem('user', JSON.stringify(user));
   };
 
   const logout = () => {
-    // For now, just reset the role to 'worker'
-    setCurrentUser({ isAuthenticated: true, role: 'worker' });
+    setUser(null);
+    localStorage.removeItem('user');
   };
 
-  const value = {
-    currentUser,
-    login,
-    logout
-  };
+  return (
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };

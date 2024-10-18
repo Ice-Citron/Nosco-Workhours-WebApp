@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../components/common/Logo';
 import LoginForm from '../components/auth/LoginForm';
@@ -7,12 +7,16 @@ import Footer from '../components/layout/Footer';
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
 
-  const handleLogin = (email, password, role) => {
-    // Call login function from AuthContext
+  // Extract the role from the location state, default to 'worker'
+  const role = location.state?.role || 'worker';
+
+  const handleLogin = (email, password) => {
+    // Call login function from AuthContext, passing the role
     login(email, password, role);
-    // Directly navigate to the appropriate dashboard based on the role
+    // Navigate to the appropriate dashboard based on the role
     navigate(role === 'admin' ? '/admin/dashboard' : '/worker/dashboard');
   };
 
@@ -29,7 +33,7 @@ const LoginPage = () => {
           <h1 className="text-3xl font-bold text-center mb-8 text-nosco-red">
             Login to Your Account
           </h1>
-          <LoginForm onSubmit={handleLogin} />
+          <LoginForm onSubmit={handleLogin} initialRole={role} />
         </div>
       </main>
       

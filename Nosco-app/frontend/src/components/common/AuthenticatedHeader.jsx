@@ -1,37 +1,33 @@
 import React from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import Logo from './Logo';
+import { useNavigate } from 'react-router-dom';
+import Logo from '../common/Logo';
+import { useAuth } from '../../context/AuthContext';
 
 const AuthenticatedHeader = () => {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   const handleLogout = () => {
-    // For now, just redirect to the login page
-    // In the future, implement actual logout logic here
+    logout();
     navigate('/login');
+  };
+
+  const getDashboardPath = () => {
+    return user?.role === 'admin' ? '/admin/dashboard' : '/worker/dashboard';
   };
 
   return (
     <header className="bg-white shadow-md">
       <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-        <Link to="/worker/dashboard">
-          <Logo className="h-10" />
-        </Link>
-        <nav>
-          <ul className="flex space-x-4">
-            <li>
-              <Link to="/worker/dashboard" className="text-nosco-red hover:text-nosco-red-dark">Dashboard</Link>
-            </li>
-            <li>
-              <button
-                onClick={handleLogout}
-                className="bg-nosco-red text-white py-2 px-4 rounded hover:bg-nosco-red-dark transition duration-300"
-              >
-                Logout
-              </button>
-            </li>
-          </ul>
-        </nav>
+        <Logo className="h-16 w-auto" linkTo={getDashboardPath()} />
+        <div>
+          <button
+            onClick={handleLogout}
+            className="bg-nosco-red text-white py-2 px-4 rounded hover:bg-nosco-red-dark transition duration-300"
+          >
+            Logout
+          </button>
+        </div>
       </div>
     </header>
   );

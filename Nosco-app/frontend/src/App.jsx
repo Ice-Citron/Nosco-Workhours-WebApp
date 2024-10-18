@@ -29,16 +29,16 @@ const App = () => {
             <Route path="/register" element={<RegistrationPage />} />
             <Route path="/password-reset" element={<PasswordResetRequestPage />} />
             <Route path="/contact-support" element={<ContactSupportPage />} />
-
-            <Route path="/worker/dashboard" element={<WorkerDashboardPage />} />
-            <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
-
-            <Route path="/submit-expense" element={<ProtectedRoute requiredRole="Employee"><SubmitExpensePage /></ProtectedRoute>} />
-            <Route path="/log-hours" element={<ProtectedRoute requiredRole="Employee"><LogHoursPage /></ProtectedRoute>} />
-            <Route path="/reports" element={<ProtectedRoute requiredRole="Admin"><ReportsPage /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute requiredRole="Employee"><ProfilePage /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute requiredRole="Admin"><SettingsPage /></ProtectedRoute>} />
             <Route path="/loading" element={<LoadingPage />} />
+
+            <Route path="/worker/dashboard" element={<ProtectedRoute><WorkerDashboardPage /></ProtectedRoute>} />
+            <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
+            <Route path="/worker/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+            <Route path="/worker/submit-expense" element={<ProtectedRoute><SubmitExpensePage /></ProtectedRoute>} />
+            <Route path="/worker/log-hours" element={<ProtectedRoute><LogHoursPage /></ProtectedRoute>} />
+            <Route path="/admin/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+            <Route path="/admin/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+
             <Route path="*" element={<ErrorPage />} />
           </Routes>
         </div>
