@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import AuthenticatedHeader from '../components/common/AuthenticatedHeader';
-import AuthenticatedFooter from '../components/common/AuthenticatedFooter';
+
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -72,8 +71,7 @@ const ProfilePage = () => {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <AuthenticatedHeader />
-      <main className="flex-grow container mx-auto px-4 py-8">
+      <main className="flex-grow container mx-auto px-4 py-2">
         <h1 className="text-3xl font-bold text-nosco-red mb-8">Profile</h1>
 
         {/* Profile Picture */}
@@ -306,7 +304,6 @@ const ProfilePage = () => {
           </form>
         </section>
       </main>
-      <AuthenticatedFooter />
     </div>
   );
 };

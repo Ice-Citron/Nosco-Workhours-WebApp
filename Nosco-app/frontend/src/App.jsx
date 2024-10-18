@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import WorkerLayout from './components/layout/WorkerLayout';
 
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
@@ -31,11 +32,15 @@ const App = () => {
             <Route path="/contact-support" element={<ContactSupportPage />} />
             <Route path="/loading" element={<LoadingPage />} />
 
-            <Route path="/worker/dashboard" element={<ProtectedRoute><WorkerDashboardPage /></ProtectedRoute>} />
+            {/* Worker Routes */}
+            <Route path="/worker" element={<WorkerLayout />}>
+              <Route path="/worker/dashboard" element={<ProtectedRoute><WorkerDashboardPage /></ProtectedRoute>} />
+              <Route path="/worker/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+              <Route path="/worker/submit-expense" element={<ProtectedRoute><SubmitExpensePage /></ProtectedRoute>} />
+              <Route path="/worker/log-work-hours" element={<ProtectedRoute><LogHoursPage /></ProtectedRoute>} />
+            </Route>
+
             <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
-            <Route path="/worker/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-            <Route path="/worker/submit-expense" element={<ProtectedRoute><SubmitExpensePage /></ProtectedRoute>} />
-            <Route path="/worker/log-hours" element={<ProtectedRoute><LogHoursPage /></ProtectedRoute>} />
             <Route path="/admin/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
             <Route path="/admin/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 

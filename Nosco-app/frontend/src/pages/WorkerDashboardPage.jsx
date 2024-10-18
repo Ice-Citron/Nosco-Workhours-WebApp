@@ -1,16 +1,12 @@
 import React from 'react';
-import AuthenticatedHeader from '../components/common/AuthenticatedHeader';
-import AuthenticatedFooter from '../components/common/AuthenticatedFooter';
 import WorkerDashboard from '../components/worker/WorkerDashboard';
 
 const WorkerDashboardPage = () => {
   return (
-    <div className="flex flex-col min-h-screen">
-      <AuthenticatedHeader />
-      <main className="flex-grow">
+    <div className="flex flex-col min-h-screen bg-gray-100">
+      <main className="flex-grow container mx-auto px-4 py-2">
         <WorkerDashboard />
       </main>
-      <AuthenticatedFooter />
     </div>
   );
 };

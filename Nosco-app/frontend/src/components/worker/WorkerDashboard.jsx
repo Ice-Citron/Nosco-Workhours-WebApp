@@ -38,7 +38,7 @@ const WorkerDashboard = () => {
   ];
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <>
       {/* Navigation Menu */}
       <nav className="flex justify-center flex-wrap gap-2 mb-8">
         {navLinks.map((link, index) => (
@@ -56,7 +56,7 @@ const WorkerDashboard = () => {
       <h1 className="text-3xl font-bold text-nosco-red mb-8">Welcome, {workerName}</h1>
       
       {/* Current Project Section */}
-      <section className="mb-8 p-4 bg-gray-100 rounded-lg">
+      <section className="mb-8 p-4 bg-white rounded-lg shadow">
         <h2 className="text-2xl font-semibold mb-2">Current Project</h2>
         <h3 className="text-xl font-medium">{currentProject.name}</h3>
         <p className="mb-2">{currentProject.summary}</p>
@@ -98,7 +98,7 @@ const WorkerDashboard = () => {
         <h2 className="text-2xl font-semibold mb-4">Recent Notifications</h2>
         <NotificationList notifications={notifications} />
       </div>
-    </div>
+    </>
   );
 };
 
