@@ -10,20 +10,25 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+      setLoading(true);
       if (firebaseUser) {
-        // Fetch additional user data from Firestore
-        const userDoc = await firestore.collection('users').doc(firebaseUser.uid).get();
-        const userData = userDoc.data();
-        
-        const user = {
-          id: firebaseUser.uid,
-          name: firebaseUser.displayName || userData.name,
-          email: firebaseUser.email,
-          role: userData.role, // Get role from Firestore
-          profilePic: firebaseUser.photoURL || userData.profilePic
-        };
-        setUser(user);
-        localStorage.setItem('user', JSON.stringify(user));
+        try {
+          const userDoc = await firestore.collection('users').doc(firebaseUser.uid).get();
+          const userData = userDoc.data();
+          
+          const user = {
+            id: firebaseUser.uid,
+            name: firebaseUser.displayName || userData?.name,
+            email: firebaseUser.email,
+            role: userData?.role,
+            profilePic: firebaseUser.photoURL || userData?.profilePic || '../assets/images/default-pfp.png'
+          };
+          setUser(user);
+          localStorage.setItem('user', JSON.stringify(user));
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+          setUser(null);
+        }
       } else {
         setUser(null);
         localStorage.removeItem('user');
@@ -36,9 +41,9 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password, role) => {
     try {
+      setLoading(true);
       const { user: firebaseUser } = await auth.signInWithEmailAndPassword(email, password);
       
-      // Update or create user document in Firestore with the role
       await firestore.collection('users').doc(firebaseUser.uid).set({
         email: firebaseUser.email,
         role: role
@@ -47,16 +52,19 @@ export const AuthProvider = ({ children }) => {
       // The user state will be set by the onAuthStateChanged listener
     } catch (error) {
       console.error("Error logging in:", error);
+      setLoading(false);
       throw error;
     }
   };
 
   const logout = async () => {
     try {
+      setLoading(true);
       await auth.signOut();
       // The user state will be set to null by the onAuthStateChanged listener
     } catch (error) {
       console.error("Error logging out:", error);
+      setLoading(false);
       throw error;
     }
   };
