@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { auth } from '../firebase/firebase_config';
-import { firestore } from '../firebase/firebase_config'; // Assuming you have Firestore set up
+import { auth, firestore } from '../firebase/firebase_config';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 const AuthContext = createContext(null);
 
@@ -9,20 +10,24 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+    console.log("Setting up auth state listener");
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log("Auth state changed. Firebase user:", firebaseUser);
       setLoading(true);
       if (firebaseUser) {
         try {
-          const userDoc = await firestore.collection('users').doc(firebaseUser.uid).get();
-          const userData = userDoc.data();
+          const userDocRef = doc(firestore, 'users', firebaseUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          const userData = userDocSnap.data();
           
           const user = {
-            id: firebaseUser.uid,
-            name: firebaseUser.displayName || userData?.name,
+            uid: firebaseUser.uid,
+            name: firebaseUser.displayName || userData?.name || 'User',
             email: firebaseUser.email,
-            role: userData?.role,
+            role: userData?.role || 'worker',
             profilePic: firebaseUser.photoURL || userData?.profilePic || '../assets/images/default-pfp.png'
           };
+          console.log("Setting user state:", user);
           setUser(user);
           localStorage.setItem('user', JSON.stringify(user));
         } catch (error) {
@@ -30,6 +35,7 @@ export const AuthProvider = ({ children }) => {
           setUser(null);
         }
       } else {
+        console.log("No firebase user, setting user state to null");
         setUser(null);
         localStorage.removeItem('user');
       }
@@ -41,14 +47,18 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password, role) => {
     try {
+      console.log("Attempting login for email:", email, "with role:", role);
       setLoading(true);
-      const { user: firebaseUser } = await auth.signInWithEmailAndPassword(email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
       
-      await firestore.collection('users').doc(firebaseUser.uid).set({
+      const userDocRef = doc(firestore, 'users', firebaseUser.uid);
+      await setDoc(userDocRef, {
         email: firebaseUser.email,
         role: role
       }, { merge: true });
 
+      console.log("Login successful. Firebase user:", firebaseUser);
       // The user state will be set by the onAuthStateChanged listener
     } catch (error) {
       console.error("Error logging in:", error);
@@ -59,8 +69,10 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      console.log("Attempting logout");
       setLoading(true);
-      await auth.signOut();
+      await signOut(auth);
+      console.log("Logout successful");
       // The user state will be set to null by the onAuthStateChanged listener
     } catch (error) {
       console.error("Error logging out:", error);
@@ -69,8 +81,27 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUserProfilePic = async (newProfilePicUrl) => {
+    if (user) {
+      try {
+        const userDocRef = doc(firestore, 'users', user.uid);
+        await setDoc(userDocRef, { profilePic: newProfilePicUrl }, { merge: true });
+        
+        setUser(prevUser => ({
+          ...prevUser,
+          profilePic: newProfilePicUrl
+        }));
+        
+        localStorage.setItem('user', JSON.stringify({...user, profilePic: newProfilePicUrl}));
+        console.log("Profile picture updated successfully");
+      } catch (error) {
+        console.error("Error updating profile picture:", error);
+      }
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUserProfilePic }}>
       {children}
     </AuthContext.Provider>
   );

@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 const AuthenticatedHeader = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -17,6 +17,14 @@ const AuthenticatedHeader = () => {
     return user?.role === 'admin' ? '/admin/dashboard' : '/worker/dashboard';
   };
 
+  if (loading) {
+    return <div>Loading...</div>; // Or any loading indicator you prefer
+  }
+
+  if (!user) {
+    return null; // Or redirect to login, or show a generic header
+  }
+
   return (
     <header className="bg-white shadow-md">
       <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -26,7 +34,7 @@ const AuthenticatedHeader = () => {
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none"
           >
-            <span className="text-sm font-medium">{user.name}</span>
+            <span className="text-sm font-medium">{user.name || 'User'}</span>
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
             </svg>
