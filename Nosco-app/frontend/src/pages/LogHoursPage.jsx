@@ -16,34 +16,50 @@ const LogHoursPage = () => {
   useEffect(() => {
     const fetchCurrentProject = async () => {
       try {
-        console.log('Current user:', user); // Debug log
-        if (user?.uid) {
-          console.log('Fetching project for user ID:', user.uid); // Debug log
+        if (!user?.uid) return;
+        console.log('Starting project fetch...'); // New log
+        
+        // Get project assignment
+        const assignmentsRef = collection(firestore, 'projectAssignments');
+        const q = query(
+          assignmentsRef,
+          where('userID', '==', user.uid),
+          where('status', '==', 'active')
+        );
+        
+        console.log('Fetching assignment...'); // New log
+        const assignmentSnapshot = await getDocs(q);
+        console.log('Assignment snapshot received'); // New log
+        
+        if (!assignmentSnapshot.empty) {
+          const assignment = assignmentSnapshot.docs[0].data();
+          console.log('Assignment data:', assignment); // New log
           
-          // Get project assignment
-          const assignmentsRef = collection(firestore, 'projectAssignments');
-          const q = query(
-            assignmentsRef,
-            where('userID', '==', user.uid),
-            where('status', '==', 'active')
-          );
-          
-          const assignmentSnapshot = await getDocs(q);
-          console.log('Assignment snapshot empty?', assignmentSnapshot.empty); // Debug log
-          
-          if (!assignmentSnapshot.empty) {
-            const assignment = assignmentSnapshot.docs[0].data();
-            console.log('Found assignment:', assignment); // Debug log
-            
-            // Rest of your code...
+          // Get project details
+          console.log('Fetching project with ID:', assignment.projectID); // New log
+          const projectRef = doc(firestore, 'projects', assignment.projectID);
+          const projectDoc = await getDoc(projectRef);
+          console.log('Project document received:', projectDoc.exists()); // New log
+  
+          if (projectDoc.exists()) {
+            const projectData = {
+              id: projectDoc.id,
+              ...projectDoc.data(),
+              assignmentId: assignmentSnapshot.docs[0].id
+            };
+            console.log('Setting project data:', projectData); // New log
+            setCurrentProject(projectData);
           }
         }
       } catch (err) {
-        console.error('Detailed error:', err); // Debug log
+        console.error('Detailed error:', err);
         setNotification({
           type: 'error',
-          message: 'Failed to fetch project details'
+          message: `Failed to fetch project details: ${err.message}`
         });
+      } finally {
+        console.log('Setting loading to false'); // New log
+        setLoading(false);
       }
     };
   
@@ -85,13 +101,17 @@ const LogHoursPage = () => {
     }
   };
 
+  // Loading skeleton
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto p-4">
         <div className="animate-pulse">
           <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          <div className="space-y-4">
+            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+            <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+          </div>
         </div>
       </div>
     );

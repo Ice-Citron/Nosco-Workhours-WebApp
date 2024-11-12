@@ -62,7 +62,8 @@ export const timesheetService = {
       const snapshot = await getDocs(q);
       return snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        date: doc.data().date.toDate() // Ensure date is converted to JS Date object
       }));
     } catch (error) {
       console.error('Error fetching work hours:', error);

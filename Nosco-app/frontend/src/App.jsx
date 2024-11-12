@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import WorkerLayout from './components/layout/WorkerLayout';
 
@@ -18,6 +19,9 @@ import SettingsPage from './pages/SettingsPage';
 import ErrorPage from './pages/ErrorPage';
 import LoadingPage from './pages/LoadingPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
+
+import WorkHoursLayout from './components/timesheets/WorkHoursLayout';
+import WorkHoursHistoryPage from './pages/WorkHoursHistoryPage';
 
 
 const AuthenticatedApp = () => {
@@ -42,9 +46,16 @@ const AuthenticatedApp = () => {
           <Route path="/worker/dashboard" element={<ProtectedRoute><WorkerDashboardPage /></ProtectedRoute>} />
           <Route path="/worker/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/worker/submit-expense" element={<ProtectedRoute><SubmitExpensePage /></ProtectedRoute>} />
-          <Route path="/worker/log-work-hours" element={<ProtectedRoute><LogHoursPage /></ProtectedRoute>} />
+          
+          {/* Work Hours Routes */}
+          <Route path="/worker/work-hours" element={<ProtectedRoute><WorkHoursLayout /></ProtectedRoute>}>
+            <Route index element={<Navigate to="submit" />} />
+            <Route path="submit" element={<LogHoursPage />} />
+            <Route path="history" element={<WorkHoursHistoryPage />} />
+          </Route>
         </Route>
 
+        {/* Admin Routes */}
         <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
         <Route path="/admin/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
         <Route path="/admin/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
