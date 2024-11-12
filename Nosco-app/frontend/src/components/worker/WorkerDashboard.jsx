@@ -1,16 +1,36 @@
-import React from 'react';
+// src/components/worker/WorkerDashboard.jsx
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { projectService } from '../../services/projectService';
 import SummaryCard from './SummaryCard';
 import NotificationList from '../common/NotificationList';
 
 const WorkerDashboard = () => {
   const navigate = useNavigate();
-  const workerName = "John Doe"; // Placeholder name, replace with actual data later
-  const currentProject = {
-    name: "Project Alpha",
-    summary: "A brief description of Project Alpha goes here.",
-    status: "Active" // or "Ended"
-  };
+  const { user } = useAuth();
+  const [currentProject, setCurrentProject] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchCurrentProject = async () => {
+      try {
+        if (user?.uid) {
+          const project = await projectService.getCurrentUserProject(user.uid);
+          setCurrentProject(project);
+        }
+      } catch (err) {
+        setError('Failed to fetch project details');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCurrentProject();
+  }, [user]);
+
 
   const summaryData = [
     { title: "Total Hours Worked This Month", value: "160", unit: "hours" },
@@ -37,6 +57,14 @@ const WorkerDashboard = () => {
     { title: "Project Invitations", path: "/worker/project-invitations" },
   ];
 
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="text-red-600">{error}</div>;
+  }
+
   return (
     <>
       {/* Navigation Menu */}
@@ -53,16 +81,28 @@ const WorkerDashboard = () => {
       </nav>
 
       {/* Welcome Banner */}
-      <h1 className="text-3xl font-bold text-nosco-red mb-8">Welcome, {workerName}</h1>
+      <h1 className="text-3xl font-bold text-nosco-red mb-8">
+        Welcome, {user?.name || 'Worker'}
+      </h1>
       
       {/* Current Project Section */}
       <section className="mb-8 p-4 bg-white rounded-lg shadow">
         <h2 className="text-2xl font-semibold mb-2">Current Project</h2>
-        <h3 className="text-xl font-medium">{currentProject.name}</h3>
-        <p className="mb-2">{currentProject.summary}</p>
-        <p className={`font-semibold ${currentProject.status === 'Active' ? 'text-green-600' : 'text-red-600'}`}>
-          Status: {currentProject.status}
-        </p>
+        {currentProject ? (
+          <>
+            <h3 className="text-xl font-medium">{currentProject.name}</h3>
+            <p className="mb-2">{currentProject.description}</p>
+            <p className="text-gray-600">Location: {currentProject.location}</p>
+            <p className="text-gray-600">
+              Duration: {new Date(currentProject.startDate).toLocaleDateString()} - {new Date(currentProject.endDate).toLocaleDateString()}
+            </p>
+            <p className={`font-semibold ${currentProject.status === 'active' ? 'text-green-600' : 'text-red-600'}`}>
+              Status: {currentProject.status.charAt(0).toUpperCase() + currentProject.status.slice(1)}
+            </p>
+          </>
+        ) : (
+          <p className="text-yellow-600">No active project assigned.</p>
+        )}
       </section>
 
       {/* Summary Cards */}
@@ -76,7 +116,7 @@ const WorkerDashboard = () => {
       <div className="mb-8">
         <h2 className="text-2xl font-semibold mb-4">Quick Actions</h2>
         <div className="flex space-x-4">
-          {currentProject.status === 'Active' && (
+          {currentProject.status === 'active' && (
             <button
               onClick={() => navigate('/worker/log-work-hours')}
               className="bg-nosco-red text-white py-2 px-4 rounded hover:bg-nosco-red-dark transition duration-300"
