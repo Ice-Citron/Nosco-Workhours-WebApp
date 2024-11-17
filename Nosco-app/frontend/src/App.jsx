@@ -22,6 +22,8 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 
 import WorkHoursLayout from './components/timesheets/WorkHoursLayout';
 import WorkHoursHistoryPage from './pages/WorkHoursHistoryPage';
+import ExpensesLayout from './components/expenses/ExpensesLayout';
+import ExpenseHistoryPage from './pages/ExpenseHistoryPage';
 
 
 const AuthenticatedApp = () => {
@@ -46,12 +48,20 @@ const AuthenticatedApp = () => {
           <Route path="/worker/dashboard" element={<ProtectedRoute><WorkerDashboardPage /></ProtectedRoute>} />
           <Route path="/worker/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/worker/submit-expense" element={<ProtectedRoute><SubmitExpensePage /></ProtectedRoute>} />
+          <Route path="/worker/log-work-hours" element={<ProtectedRoute><LogHoursPage /></ProtectedRoute>} />
           
           {/* Work Hours Routes */}
           <Route path="/worker/work-hours" element={<ProtectedRoute><WorkHoursLayout /></ProtectedRoute>}>
             <Route index element={<Navigate to="submit" />} />
             <Route path="submit" element={<LogHoursPage />} />
             <Route path="history" element={<WorkHoursHistoryPage />} />
+          </Route>
+          
+          {/* Expense Routes */}
+          <Route path="/worker/expenses" element={<ProtectedRoute><ExpensesLayout /></ProtectedRoute>}>
+            <Route index element={<Navigate to="submit" />} />
+            <Route path="submit" element={<SubmitExpensePage />} />
+            <Route path="history" element={<ExpenseHistoryPage />} />
           </Route>
         </Route>
 
