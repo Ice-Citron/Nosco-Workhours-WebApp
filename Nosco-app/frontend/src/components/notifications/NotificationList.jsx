@@ -1,4 +1,12 @@
-// src/components/notifications/NotificationList.jsx
+// components/notifications/NotificationList.jsx
+import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { useCollectionData } from 'react-firebase-hooks/firestore';
+import { getNotificationsQuery, markAllAsRead } from '../../services/notificationService';
+import { NotificationItem } from './NotificationItem';
+import { NotificationModal } from './NotificationModal';
+
+
 export const NotificationList = () => {
     const { user } = useAuth();
     const notificationsQuery = getNotificationsQuery(user.uid);

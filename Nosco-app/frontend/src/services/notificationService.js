@@ -1,7 +1,8 @@
 // src/services/notificationService.js
-import { db } from '../firebase/firebaseConfig';
-import { collection, query, where, orderBy, updateDoc, doc, writeBatch } from 'firebase/firestore';
+import { firestore as db } from '../firebase/firebase_config';
+import { collection, query, where, orderBy, updateDoc, doc, writeBatch, getDocs } from 'firebase/firestore';
 import { useCollectionData } from 'react-firebase-hooks/firestore';
+
 
 export const getNotificationsQuery = (userId) => {
   return query(

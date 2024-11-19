@@ -25,6 +25,7 @@ import WorkHoursHistoryPage from './pages/WorkHoursHistoryPage';
 import ExpensesLayout from './components/expenses/ExpensesLayout';
 import ExpenseHistoryPage from './pages/ExpenseHistoryPage';
 import PaymentHistoryPage from './pages/PaymentHistoryPage';
+import NotificationsPage from './pages/NotificationsPage';
 
 
 const AuthenticatedApp = () => {
@@ -63,7 +64,9 @@ const AuthenticatedApp = () => {
             <Route path="history" element={<ExpenseHistoryPage />} />
           </Route>
           <Route path="/worker/payments" element={<ProtectedRoute><PaymentHistoryPage /></ProtectedRoute>} />
+          <Route path="/worker/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
         </Route>
+        
 
         {/* Admin Routes */}
         <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />

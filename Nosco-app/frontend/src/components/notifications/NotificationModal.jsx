@@ -1,4 +1,6 @@
 // src/components/notifications/NotificationModal.jsx
+import { markAsRead } from '../../services/notificationService';
+
 export const NotificationModal = ({ notification, onClose }) => {
     const handleMarkAsRead = async () => {
       await markAsRead(notification.id);
