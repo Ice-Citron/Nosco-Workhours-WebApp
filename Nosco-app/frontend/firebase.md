@@ -40,3 +40,18 @@
     }
   }
 }
+
+
+// Notification schema in Firestore
+{
+  id: string,
+  userId: string,
+  type: string, // 'expense' | 'payment' | 'project'
+  title: string,
+  message: string,
+  read: boolean,
+  link: string?, // Optional link to related entity
+  createdAt: timestamp,
+  entityId: string?, // ID of related entity (expense, payment, etc)
+  entityType: string? // Type of related entity
+}
