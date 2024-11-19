@@ -26,6 +26,7 @@ import ExpensesLayout from './components/expenses/ExpensesLayout';
 import ExpenseHistoryPage from './pages/ExpenseHistoryPage';
 import PaymentHistoryPage from './pages/PaymentHistoryPage';
 import NotificationsPage from './pages/NotificationsPage';
+import RewardsPage from './pages/RewardsPage';
 
 
 const AuthenticatedApp = () => {
@@ -65,6 +66,7 @@ const AuthenticatedApp = () => {
           </Route>
           <Route path="/worker/payments" element={<ProtectedRoute><PaymentHistoryPage /></ProtectedRoute>} />
           <Route path="/worker/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+          <Route path="/worker/rewards" element={<ProtectedRoute><RewardsPage /></ProtectedRoute>} />
         </Route>
         
 

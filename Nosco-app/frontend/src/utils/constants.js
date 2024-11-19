@@ -21,3 +21,18 @@ export const PAYMENT_METHODS = {
     CASH: 'cash',
     PENDING: 'pending'
 };
+
+// utils/constants.js
+export const NOTIFICATION_TYPES = {
+    EXPENSE: 'expense',
+    PAYMENT: 'payment',
+    PROJECT: 'project',
+    WORKHOURS: 'workHours'
+   };
+   
+   export const ENTITY_TYPES = {
+    EXPENSE: 'expense',
+    PAYMENT: 'payment',
+    PROJECT: 'project',
+    WORKHOURS: 'workHours'
+   };

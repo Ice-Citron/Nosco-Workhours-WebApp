@@ -1,4 +1,7 @@
 // src/components/notifications/NotificationItem.jsx
+import PropTypes from 'prop-types';
+
+
 export const NotificationItem = ({ notification, onClick }) => {
     const getIcon = (type) => {
       switch(type) {
@@ -27,4 +30,15 @@ export const NotificationItem = ({ notification, onClick }) => {
         </div>
       </div>
     );
+  };
+
+  NotificationItem.propTypes = {
+    notification: PropTypes.shape({
+      type: PropTypes.string.isRequired,
+      title: PropTypes.string.isRequired,
+      message: PropTypes.string.isRequired,
+      createdAt: PropTypes.object.isRequired,
+      read: PropTypes.bool.isRequired
+    }).isRequired,
+    onClick: PropTypes.func.isRequired
   };

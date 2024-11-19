@@ -55,3 +55,24 @@
   entityId: string?, // ID of related entity (expense, payment, etc)
   entityType: string? // Type of related entity
 }
+
+---
+
+// rewards collection
+{
+  userID: string,
+  totalPoints: number,
+  lastUpdated: timestamp,
+  rank: number
+}
+
+// rewardHistory collection
+{
+  userID: string,
+  points: number,
+  change: number,
+  reason: string,
+  relatedEntityId: string?, // e.g., expenseId
+  relatedEntityType: string?, // e.g., 'expense'
+  createdAt: timestamp
+}
