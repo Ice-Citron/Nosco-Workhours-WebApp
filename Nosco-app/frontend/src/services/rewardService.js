@@ -14,6 +14,35 @@ import {
     serverTimestamp 
   } from 'firebase/firestore';
 
+  
+// Initialize rewards for a new user
+export const initializeUserRewards = async (userID, userName) => {
+    try {
+      // Create initial rewards document
+      await setDoc(doc(firestore, 'rewards', userID), {
+        userID,
+        userName,
+        totalPoints: 0,
+        lastUpdated: serverTimestamp(),
+        createdAt: serverTimestamp()
+      });
+  
+      // Create first history entry
+      await setDoc(doc(collection(firestore, 'rewardHistory')), {
+        userID,
+        change: 0,
+        reason: 'Account Created',
+        balance: 0,
+        createdAt: serverTimestamp()
+      });
+  
+      return true;
+    } catch (error) {
+      console.error('Error initializing rewards:', error);
+      return false;
+    }
+  };
+
 export const rewardService = {
   // Get user's current reward points
   async getUserPoints(userID) {
