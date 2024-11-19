@@ -1,20 +1,51 @@
-import React, { useMemo } from 'react';
-import { MessageSquare, Receipt, Calendar, Building } from 'lucide-react';
+import React from 'react';
+import { MessageSquare, Calendar, Building, Check, User } from 'lucide-react';
 import { format } from 'date-fns';
 
 const PaymentHistoryTable = ({ payments, projects, expenses, onRowClick, loading }) => {
-  const columns = useMemo(() => [
+  // Helper function to safely format dates
+  const formatDate = (date) => {
+    if (!date) return '-';
+    try {
+      const dateObj = date?.toDate?.() ? date.toDate() : new Date(date);
+      return format(dateObj, 'MMM dd, yyyy');
+    } catch (error) {
+      console.warn('Invalid date:', date);
+      return '-';
+    }
+  };
+
+  // Helper function to safely format timestamps
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return '-';
+    try {
+      const dateObj = timestamp?.toDate?.() ? timestamp.toDate() : new Date(timestamp);
+      return format(dateObj, 'MMM dd, yyyy HH:mm');
+    } catch (error) {
+      console.warn('Invalid timestamp:', timestamp);
+      return '-';
+    }
+  };
+
+  // Helper function to check if comments exist and extract them
+  const getCommentDetails = (payment) => {
+    // First check if comments exist as a map
+    if (payment.comments && typeof payment.comments === 'object' && !Array.isArray(payment.comments)) {
+      return payment.comments;
+    }
+    return null;
+  };
+
+  const columns = [
     {
       header: "Date",
       accessorKey: "date",
       cell: ({ getValue }) => {
         const date = getValue();
-        if (!date) return '-';
-        const dateObj = date?.toDate?.() ? date.toDate() : new Date(date);
         return (
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-gray-500" />
-            <span>{format(dateObj, 'MMM dd, yyyy')}</span>
+            <span>{formatDate(date)}</span>
           </div>
         );
       }
@@ -22,43 +53,22 @@ const PaymentHistoryTable = ({ payments, projects, expenses, onRowClick, loading
     {
       header: "Type",
       accessorKey: "paymentType",
-      cell: ({ getValue, row }) => {
-        const type = getValue();
-        const relatedExpense = row.original.relatedExpenseID && 
-          expenses[row.original.relatedExpenseID];
-        
+      cell: ({ row }) => {
+        const { paymentType, amount, currency } = row.original;
         return (
-          <div className="flex items-center gap-2">
-            <Receipt className="h-4 w-4 text-gray-500" />
-            <div>
-              <div className="font-medium">
-                {type
-                  .replace(/([A-Z])/g, ' $1')
-                  .replace(/^./, str => str.toUpperCase())
-                  .trim()}
-              </div>
-              {relatedExpense && (
-                <div className="text-xs text-gray-500">
-                  Expense ID: {row.original.relatedExpenseID}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      }
-    },
-    {
-      header: "Amount",
-      accessorKey: "amount",
-      cell: ({ getValue, row }) => {
-        const amount = getValue();
-        const currency = row.original.currency || 'USD';
-        return (
-          <div className="font-medium">
-            {new Intl.NumberFormat('en-US', {
-              style: 'currency',
-              currency: currency
-            }).format(amount || 0)}
+          <div className="flex flex-col">
+            <span className="font-medium">
+              {paymentType
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, str => str.toUpperCase())
+                .trim()}
+            </span>
+            <span className="text-sm text-gray-600">
+              {new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: currency || 'USD'
+              }).format(amount || 0)}
+            </span>
           </div>
         );
       }
@@ -69,7 +79,6 @@ const PaymentHistoryTable = ({ payments, projects, expenses, onRowClick, loading
       cell: ({ getValue }) => {
         const projectId = getValue();
         const project = projects[projectId];
-        
         return project ? (
           <div className="flex items-center gap-2">
             <Building className="h-4 w-4 text-gray-500" />
@@ -85,7 +94,8 @@ const PaymentHistoryTable = ({ payments, projects, expenses, onRowClick, loading
       header: "Status",
       accessorKey: "status",
       cell: ({ getValue }) => {
-        const status = getValue() || '';
+        const status = getValue();
+        
         const statusStyles = {
           completed: 'bg-green-100 text-green-800',
           pending: 'bg-yellow-100 text-yellow-800',
@@ -95,47 +105,59 @@ const PaymentHistoryTable = ({ payments, projects, expenses, onRowClick, loading
         };
 
         return (
-          <span className={`px-3 py-1 rounded-full text-sm font-medium inline-flex items-center ${
-            statusStyles[status] || statusStyles.default
-          }`}>
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-          </span>
+          <div className="flex flex-col gap-1">
+            <span className={`px-3 py-1 rounded-full text-sm font-medium inline-flex items-center ${
+              statusStyles[status] || statusStyles.default
+            }`}>
+              {status === 'completed' ? <Check className="h-3 w-3 mr-1" /> : null}
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+            </span>
+          </div>
         );
+      }
+    },
+    {
+      header: "Reference",
+      accessorKey: "referenceNumber",
+      cell: ({ getValue }) => {
+        const ref = getValue();
+        return ref ? (
+          <span className="text-sm">{ref}</span>
+        ) : '-';
       }
     },
     {
       header: "Comments",
       accessorKey: "comments",
-      cell: ({ getValue }) => {
-        const comments = getValue() || [];
-        return comments.length > 0 ? (
+      cell: ({ row }) => {
+        const comment = getCommentDetails(row.original);
+        if (!comment) return (
+          <span className="text-gray-400 text-sm">No comments</span>
+        );
+        
+        return (
           <div className="relative group">
-            <div className="flex items-center gap-1 cursor-pointer">
-              <MessageSquare className="h-4 w-4 text-gray-500" />
-              <span className="text-sm text-gray-500">{comments.length}</span>
+            <div className="flex items-center gap-1 text-blue-600 cursor-pointer">
+              <MessageSquare className="h-4 w-4" />
+              <span className="text-sm">From: {comment.userID}</span>
             </div>
             <div className="absolute z-10 invisible group-hover:visible bg-white border rounded-lg shadow-lg p-3 min-w-[300px] right-0 mt-1">
-              <div className="max-h-[200px] overflow-y-auto space-y-2">
-                {comments.map((comment, index) => (
-                  <div key={index} className="text-sm border-b last:border-0 pb-2">
-                    <div className="font-medium break-words">{comment.text}</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      {format(
-                        comment.createdAt?.toDate?.() 
-                          ? comment.createdAt.toDate() 
-                          : new Date(comment.createdAt),
-                        'MMM dd, yyyy HH:mm'
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <User className="h-3 w-3" />
+                  <span>{comment.userID}</span>
+                </div>
+                <div className="text-sm font-medium">{comment.text}</div>
+                <div className="text-xs text-gray-500">
+                  {formatTimestamp(comment.createdAt)}
+                </div>
               </div>
             </div>
           </div>
-        ) : null;
+        );
       }
     }
-  ], [projects, expenses]);
+  ];
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -167,9 +189,9 @@ const PaymentHistoryTable = ({ payments, projects, expenses, onRowClick, loading
                 </td>
               </tr>
             ) : (
-              payments.map((payment, index) => (
+              payments.map((payment) => (
                 <tr
-                  key={payment.id || index}
+                  key={payment.id}
                   onClick={() => onRowClick(payment)}
                   className="hover:bg-gray-50 cursor-pointer transition-colors"
                 >

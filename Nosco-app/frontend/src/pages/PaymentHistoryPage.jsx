@@ -31,6 +31,7 @@ const PaymentHistoryPage = () => {
 
   // Function to fetch project details
   const fetchProjectDetails = async (projectId) => {
+    if (!projectId) return null;
     try {
       const projectRef = doc(firestore, 'projects', projectId);
       const projectDoc = await getDoc(projectRef);
@@ -44,13 +45,21 @@ const PaymentHistoryPage = () => {
     }
   };
 
-  // Function to fetch expense details
+  // Function to fetch expense details with better error handling
   const fetchExpenseDetails = async (expenseId) => {
+    if (!expenseId) return null;
     try {
-      return await expenseService.getExpenseById(expenseId);
+      const expense = await expenseService.getExpenseById(expenseId);
+      return expense;
     } catch (error) {
-      console.error('Error fetching expense:', error);
-      return null;
+      // Log the error but don't let it break the app
+      console.warn(`Could not fetch expense ${expenseId}:`, error.message);
+      return {
+        id: expenseId,
+        status: 'Unknown',
+        amount: 0,
+        error: 'Could not load expense details'
+      };
     }
   };
 
@@ -61,35 +70,48 @@ const PaymentHistoryPage = () => {
       user.uid,
       { status: filterStatus, paymentType: filterType },
       async (newPayments) => {
-        // Collect unique project and expense IDs
-        const projectIds = [...new Set(newPayments.map(p => p.projectID))];
-        const expenseIds = [...new Set(newPayments
-          .filter(p => p.relatedExpenseID)
-          .map(p => p.relatedExpenseID))
-        ];
+        try {
+          // Collect unique project and expense IDs
+          const projectIds = [...new Set(newPayments.map(p => p.projectID).filter(Boolean))];
+          const expenseIds = [...new Set(newPayments
+            .filter(p => p.relatedExpenseID)
+            .map(p => p.relatedExpenseID)
+          )];
 
-        // Fetch project details
-        const projectDetails = {};
-        await Promise.all(
-          projectIds.map(async (id) => {
-            const project = await fetchProjectDetails(id);
-            if (project) projectDetails[id] = project;
-          })
-        );
+          // Fetch project details
+          const projectDetails = {};
+          await Promise.all(
+            projectIds.map(async (id) => {
+              try {
+                const project = await fetchProjectDetails(id);
+                if (project) projectDetails[id] = project;
+              } catch (error) {
+                console.warn(`Failed to fetch project ${id}:`, error);
+              }
+            })
+          );
 
-        // Fetch expense details
-        const expenseDetails = {};
-        await Promise.all(
-          expenseIds.map(async (id) => {
-            const expense = await fetchExpenseDetails(id);
-            if (expense) expenseDetails[id] = expense;
-          })
-        );
+          // Fetch expense details with error handling
+          const expenseDetails = {};
+          await Promise.all(
+            expenseIds.map(async (id) => {
+              try {
+                const expense = await fetchExpenseDetails(id);
+                if (expense) expenseDetails[id] = expense;
+              } catch (error) {
+                console.warn(`Failed to fetch expense ${id}:`, error);
+              }
+            })
+          );
 
-        setProjects(projectDetails);
-        setExpenses(expenseDetails);
-        setPayments(newPayments);
-        setLoading(false);
+          setProjects(projectDetails);
+          setExpenses(expenseDetails);
+          setPayments(newPayments);
+        } catch (error) {
+          console.error('Error processing payments:', error);
+        } finally {
+          setLoading(false);
+        }
       }
     );
 
@@ -102,16 +124,24 @@ const PaymentHistoryPage = () => {
       
       // Fetch related project and expense if they haven't been fetched yet
       if (paymentDetails.projectID && !projects[paymentDetails.projectID]) {
-        const project = await fetchProjectDetails(paymentDetails.projectID);
-        if (project) {
-          setProjects(prev => ({ ...prev, [paymentDetails.projectID]: project }));
+        try {
+          const project = await fetchProjectDetails(paymentDetails.projectID);
+          if (project) {
+            setProjects(prev => ({ ...prev, [paymentDetails.projectID]: project }));
+          }
+        } catch (error) {
+          console.warn('Error fetching project details:', error);
         }
       }
 
       if (paymentDetails.relatedExpenseID && !expenses[paymentDetails.relatedExpenseID]) {
-        const expense = await fetchExpenseDetails(paymentDetails.relatedExpenseID);
-        if (expense) {
-          setExpenses(prev => ({ ...prev, [paymentDetails.relatedExpenseID]: expense }));
+        try {
+          const expense = await fetchExpenseDetails(paymentDetails.relatedExpenseID);
+          if (expense) {
+            setExpenses(prev => ({ ...prev, [paymentDetails.relatedExpenseID]: expense }));
+          }
+        } catch (error) {
+          console.warn('Error fetching expense details:', error);
         }
       }
 

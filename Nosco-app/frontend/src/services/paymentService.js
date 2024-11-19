@@ -37,17 +37,22 @@ export const paymentService = {
         (snapshot) => {
           const payments = snapshot.docs.map(doc => {
             const data = doc.data();
-            // Safely handle data conversion
+            // Safely handle data conversion, preserving the comments map structure
             return {
               id: doc.id,
               ...data,
               date: data.date?.toDate?.() || new Date(data.date),
               createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
               updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
-              comments: Array.isArray(data.comments) ? data.comments.map(comment => ({
-                ...comment,
-                createdAt: comment.createdAt?.toDate?.() || new Date(comment.createdAt)
-              })) : []
+              // Preserve the comments as a map if it exists
+              comments: data.comments && typeof data.comments === 'object' && !Array.isArray(data.comments) 
+                ? {
+                    ...data.comments,
+                    createdAt: data.comments.createdAt?.toDate?.() 
+                      ? data.comments.createdAt.toDate() 
+                      : new Date(data.comments.createdAt)
+                  }
+                : null
             };
           });
           console.log("Fetched payments:", payments); // Debug log
@@ -83,10 +88,15 @@ export const paymentService = {
         date: data.date?.toDate?.() || new Date(data.date),
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
         updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
-        comments: Array.isArray(data.comments) ? data.comments.map(comment => ({
-          ...comment,
-          createdAt: comment.createdAt?.toDate?.() || new Date(comment.createdAt)
-        })) : []
+        // Preserve the comments as a map
+        comments: data.comments && typeof data.comments === 'object' && !Array.isArray(data.comments)
+          ? {
+              ...data.comments,
+              createdAt: data.comments.createdAt?.toDate?.() 
+                ? data.comments.createdAt.toDate() 
+                : new Date(data.comments.createdAt)
+            }
+          : null
       };
     } catch (error) {
       console.error('Error fetching payment details:', error);
@@ -97,11 +107,13 @@ export const paymentService = {
   addPaymentComment: async (paymentID, comment) => {
     try {
       const paymentRef = doc(firestore, 'payments', paymentID);
+      // Update the comments field directly as a map
       await updateDoc(paymentRef, {
-        comments: arrayUnion({
-          ...comment,
+        comments: {
+          text: comment.text,
+          userID: comment.userID,
           createdAt: Timestamp.fromDate(new Date())
-        }),
+        },
         updatedAt: Timestamp.fromDate(new Date())
       });
     } catch (error) {
@@ -118,12 +130,13 @@ export const paymentService = {
         Timestamp.fromDate(new Date(payment.date)),
       createdAt: Timestamp.fromDate(new Date()),
       updatedAt: Timestamp.fromDate(new Date()),
-      comments: Array.isArray(payment.comments) ? payment.comments.map(comment => ({
-        ...comment,
-        createdAt: comment.createdAt instanceof Date ?
-          Timestamp.fromDate(comment.createdAt) :
-          Timestamp.fromDate(new Date(comment.createdAt))
-      })) : []
+      // Format comments as a map
+      comments: payment.comments ? {
+        ...payment.comments,
+        createdAt: payment.comments.createdAt instanceof Date
+          ? Timestamp.fromDate(payment.comments.createdAt)
+          : Timestamp.fromDate(new Date(payment.comments.createdAt))
+      } : null
     };
   }
 };
