@@ -1,20 +1,31 @@
-// src/services/expenseService.js
 import { firestore, storage } from '../firebase/firebase_config';
+import { 
+  collection, 
+  addDoc, 
+  doc, 
+  updateDoc, 
+  query, 
+  where, 
+  orderBy, 
+  getDocs,
+  serverTimestamp,
+  getDoc 
+} from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export const expenseService = {
   submitExpenseClaim: async ({ employeeId, amount, type, receipts, date }) => {
     try {
-      // Add expense claim to Firestore
-      const expenseRef = await firestore.collection('expenses').add({
+      const docRef = await addDoc(collection(firestore, 'expenses'), {
         employeeId,
         amount,
         type,
-        receipts, // Array of URLs
+        receipts,
         date,
         status: 'Pending',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdAt: serverTimestamp()
       });
-      return expenseRef.id;
+      return docRef.id;
     } catch (error) {
       throw new Error(error.message);
     }
@@ -22,12 +33,12 @@ export const expenseService = {
 
   uploadReceipts: async (files) => {
     try {
-      const uploadPromises = files.map((file) => {
-        const storageRef = storage.ref(`receipts/${file.name}_${Date.now()}`);
-        return storageRef.put(file).then(() => storageRef.getDownloadURL());
+      const uploadPromises = files.map(async (file) => {
+        const storageRef = ref(storage, `receipts/${file.name}_${Date.now()}`);
+        await uploadBytes(storageRef, file);
+        return getDownloadURL(storageRef);
       });
-      const receiptUrls = await Promise.all(uploadPromises);
-      return receiptUrls;
+      return await Promise.all(uploadPromises);
     } catch (error) {
       throw new Error(error.message);
     }
@@ -35,9 +46,10 @@ export const expenseService = {
 
   approveExpenseClaim: async (expenseId) => {
     try {
-      await firestore.collection('expenses').doc(expenseId).update({
+      const expenseRef = doc(firestore, 'expenses', expenseId);
+      await updateDoc(expenseRef, {
         status: 'Approved',
-        approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        approvedAt: serverTimestamp()
       });
     } catch (error) {
       throw new Error(error.message);
@@ -46,10 +58,11 @@ export const expenseService = {
 
   rejectExpenseClaim: async (expenseId, reason) => {
     try {
-      await firestore.collection('expenses').doc(expenseId).update({
+      const expenseRef = doc(firestore, 'expenses', expenseId);
+      await updateDoc(expenseRef, {
         status: 'Rejected',
         rejectionReason: reason,
-        rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        rejectedAt: serverTimestamp()
       });
     } catch (error) {
       throw new Error(error.message);
@@ -58,29 +71,48 @@ export const expenseService = {
 
   fetchExpenses: async (employeeId) => {
     try {
-      const snapshot = await firestore
-        .collection('expenses')
-        .where('employeeId', '==', employeeId)
-        .orderBy('date', 'desc')
-        .get();
-      const expenses = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      return expenses;
+        const q = query(
+            collection(firestore, 'expense'), // Change to match your collection name
+            where('userID', '==', employeeId), // Make sure this matches your field name
+            orderBy('date', 'desc')
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            date: doc.data().date?.toDate() || new Date(),
+            createdAt: doc.data().createdAt?.toDate() || null,
+            approvalDate: doc.data().approvalDate?.toDate() || null
+        }));
     } catch (error) {
-      throw new Error(error.message);
+        throw new Error(error.message);
     }
   },
 
   fetchPendingExpenses: async () => {
     try {
-      const snapshot = await firestore
-        .collection('expenses')
-        .where('status', '==', 'Pending')
-        .orderBy('createdAt', 'desc')
-        .get();
-      const expenses = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      return expenses;
+      const q = query(
+        collection(firestore, 'expenses'),
+        where('status', '==', 'Pending'),
+        orderBy('createdAt', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
       throw new Error(error.message);
     }
   },
+
+  getExpenseById: async (expenseId) => {
+    try {
+      const expenseRef = doc(firestore, 'expenses', expenseId);
+      const expenseDoc = await getDoc(expenseRef);
+      if (!expenseDoc.exists()) {
+        throw new Error('Expense not found');
+      }
+      return { id: expenseDoc.id, ...expenseDoc.data() };
+    } catch (error) {
+      throw new Error(error.message);
+    }
+  }
 };

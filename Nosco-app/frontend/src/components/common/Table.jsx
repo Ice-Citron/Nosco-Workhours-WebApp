@@ -4,6 +4,7 @@ const Table = ({
   data = [],
   columns = [],
   emptyMessage = "No data available",
+  onRowClick
 }) => {
   if (!data.length) {
     return (
@@ -30,7 +31,11 @@ const Table = ({
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {data.map((row, rowIndex) => (
-            <tr key={row.id || rowIndex}>
+            <tr 
+              key={row.id || rowIndex}
+              onClick={() => onRowClick?.(row)}
+              className={onRowClick ? "cursor-pointer hover:bg-gray-50" : ""}
+            >
               {columns.map((column, colIndex) => {
                 const value = column.accessorFn 
                   ? column.accessorFn(row)
@@ -41,7 +46,10 @@ const Table = ({
                     key={column.accessorKey || colIndex}
                     className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
                   >
-                    {column.cell ? column.cell({ getValue: () => value }) : value}
+                    {column.cell ? column.cell({ 
+                      getValue: () => value,
+                      row: { original: row }  // Pass the full row data
+                    }) : value}
                   </td>
                 );
               })}

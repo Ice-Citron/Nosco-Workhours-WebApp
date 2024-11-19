@@ -1,107 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { paymentService } from '../services/paymentService';
-import Table from '../components/common/Table';
-import Modal from '../components/common/Modal';
+import { expenseService } from '../services/expenseService';
+import PaymentHistoryTable from '../components/payments/PaymentHistoryTable';
+import PaymentDetailsModal from '../components/payments/PaymentDetailsModal';
+import PaymentTypeFilter from '../components/payments/PaymentTypeFilter';
 import SelectDropdown from '../components/common/SelectDropdown';
-import { MessageSquare } from 'lucide-react';
-import { PAYMENT_TYPES, PAYMENT_STATUSES } from '../utils/constants';
+import { PAYMENT_STATUSES } from '../utils/constants';
+import { collection, doc, getDoc } from 'firebase/firestore';
+import { firestore } from '../firebase/firebase_config';
 
 const PaymentHistoryPage = () => {
   const { user } = useAuth();
   const [payments, setPayments] = useState([]);
+  const [projects, setProjects] = useState({});
+  const [expenses, setExpenses] = useState({});
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
-  const [newComment, setNewComment] = useState('');
-
-  const columns = [
-    {
-      header: "Date",
-      accessorKey: "date",
-      cell: ({ getValue }) => new Date(getValue()).toLocaleDateString()
-    },
-    {
-      header: "Type",
-      accessorKey: "paymentType"
-    },
-    {
-      header: "Amount",
-      accessorKey: "amount",
-      cell: ({ row }) => `${row.currency} ${row.amount.toLocaleString()}`
-    },
-    {
-      header: "Status",
-      accessorKey: "status",
-      cell: ({ getValue }) => (
-        <span className={`px-2 py-1 rounded-full text-sm ${
-          getValue() === 'completed' ? 'bg-green-100 text-green-800' :
-          getValue() === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-          'bg-gray-100 text-gray-800'
-        }`}>
-          {getValue()}
-        </span>
-      )
-    },
-    {
-      header: "Description",
-      accessorKey: "description"
-    },
-    {
-      header: "",
-      accessorKey: "comments",
-      cell: ({ getValue }) => getValue()?.length > 0 && (
-        <MessageSquare className="h-5 w-5 text-gray-500" />
-      )
-    }
-  ];
-
-  useEffect(() => {
-    fetchPayments();
-  }, [filterStatus, filterType]);
-
-  const fetchPayments = async () => {
-    try {
-      setLoading(true);
-      const filters = {
-        status: filterStatus !== 'all' ? filterStatus : null,
-        paymentType: filterType !== 'all' ? filterType : null
-      };
-      const data = await paymentService.fetchUserPayments(user.uid, filters);
-      setPayments(data);
-    } catch (error) {
-      console.error('Error fetching payments:', error);
-      // You might want to show an error notification here
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRowClick = (payment) => {
-    setSelectedPayment(payment);
-    setIsModalOpen(true);
-  };
-
-  const handleAddComment = async () => {
-    if (!newComment.trim()) return;
-
-    try {
-      const comment = {
-        text: newComment,
-        userID: user.uid,
-        createdAt: new Date()
-      };
-
-      await paymentService.addPaymentComment(selectedPayment.id, comment);
-      setNewComment('');
-      await fetchPayments(); // Refresh payments to show new comment
-    } catch (error) {
-      console.error('Error adding comment:', error);
-      // You might want to show an error notification here
-    }
-  };
 
   const statusOptions = [
     { value: 'all', label: 'All Statuses' },
@@ -111,13 +29,115 @@ const PaymentHistoryPage = () => {
     }))
   ];
 
-  const typeOptions = [
-    { value: 'all', label: 'All Types' },
-    ...Object.values(PAYMENT_TYPES).map(type => ({
-      value: type,
-      label: type.charAt(0).toUpperCase() + type.slice(1)
-    }))
-  ];
+  // Function to fetch project details
+  const fetchProjectDetails = async (projectId) => {
+    try {
+      const projectRef = doc(firestore, 'projects', projectId);
+      const projectDoc = await getDoc(projectRef);
+      if (projectDoc.exists()) {
+        return { id: projectDoc.id, ...projectDoc.data() };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching project:', error);
+      return null;
+    }
+  };
+
+  // Function to fetch expense details
+  const fetchExpenseDetails = async (expenseId) => {
+    try {
+      return await expenseService.getExpenseById(expenseId);
+    } catch (error) {
+      console.error('Error fetching expense:', error);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const unsubscribe = paymentService.subscribeToUserPayments(
+      user.uid,
+      { status: filterStatus, paymentType: filterType },
+      async (newPayments) => {
+        // Collect unique project and expense IDs
+        const projectIds = [...new Set(newPayments.map(p => p.projectID))];
+        const expenseIds = [...new Set(newPayments
+          .filter(p => p.relatedExpenseID)
+          .map(p => p.relatedExpenseID))
+        ];
+
+        // Fetch project details
+        const projectDetails = {};
+        await Promise.all(
+          projectIds.map(async (id) => {
+            const project = await fetchProjectDetails(id);
+            if (project) projectDetails[id] = project;
+          })
+        );
+
+        // Fetch expense details
+        const expenseDetails = {};
+        await Promise.all(
+          expenseIds.map(async (id) => {
+            const expense = await fetchExpenseDetails(id);
+            if (expense) expenseDetails[id] = expense;
+          })
+        );
+
+        setProjects(projectDetails);
+        setExpenses(expenseDetails);
+        setPayments(newPayments);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user?.uid, filterStatus, filterType]);
+
+  const handleRowClick = async (payment) => {
+    try {
+      const paymentDetails = await paymentService.getPaymentDetails(payment.id);
+      
+      // Fetch related project and expense if they haven't been fetched yet
+      if (paymentDetails.projectID && !projects[paymentDetails.projectID]) {
+        const project = await fetchProjectDetails(paymentDetails.projectID);
+        if (project) {
+          setProjects(prev => ({ ...prev, [paymentDetails.projectID]: project }));
+        }
+      }
+
+      if (paymentDetails.relatedExpenseID && !expenses[paymentDetails.relatedExpenseID]) {
+        const expense = await fetchExpenseDetails(paymentDetails.relatedExpenseID);
+        if (expense) {
+          setExpenses(prev => ({ ...prev, [paymentDetails.relatedExpenseID]: expense }));
+        }
+      }
+
+      setSelectedPayment(paymentDetails);
+      setIsModalOpen(true);
+    } catch (error) {
+      console.error('Error fetching payment details:', error);
+    }
+  };
+
+  const handleAddComment = async (commentText) => {
+    if (!commentText.trim() || !selectedPayment) return;
+
+    try {
+      await paymentService.addPaymentComment(selectedPayment.id, {
+        text: commentText,
+        userID: user.uid,
+        createdAt: new Date()
+      });
+
+      const updatedPayment = await paymentService.getPaymentDetails(selectedPayment.id);
+      setSelectedPayment(updatedPayment);
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
+  };
 
   return (
     <div className="p-6">
@@ -127,7 +147,6 @@ const PaymentHistoryPage = () => {
         </div>
 
         <div className="p-6">
-          {/* Filters */}
           <div className="flex gap-4 mb-6">
             <div className="w-48">
               <SelectDropdown
@@ -138,88 +157,31 @@ const PaymentHistoryPage = () => {
               />
             </div>
             <div className="w-48">
-              <SelectDropdown
-                label="Payment Type"
-                options={typeOptions}
+              <PaymentTypeFilter
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
               />
             </div>
           </div>
 
-          {/* Table */}
-          <Table
-            data={payments}
-            columns={columns}
-            emptyMessage="No payments found"
+          <PaymentHistoryTable
+            payments={payments}
+            projects={projects}
+            expenses={expenses}
+            onRowClick={handleRowClick}
+            loading={loading}
           />
         </div>
       </div>
 
-      {/* Payment Details Modal */}
-      <Modal
+      <PaymentDetailsModal
+        payment={selectedPayment}
+        project={selectedPayment ? projects[selectedPayment.projectID] : null}
+        expense={selectedPayment ? expenses[selectedPayment.relatedExpenseID] : null}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Payment Details"
-      >
-        {selectedPayment && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-gray-500">Date</p>
-                <p>{new Date(selectedPayment.date).toLocaleDateString()}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Amount</p>
-                <p>{`${selectedPayment.currency} ${selectedPayment.amount.toLocaleString()}`}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Type</p>
-                <p>{selectedPayment.paymentType}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Status</p>
-                <p>{selectedPayment.status}</p>
-              </div>
-            </div>
-            
-            <div>
-              <p className="text-sm text-gray-500">Description</p>
-              <p>{selectedPayment.description}</p>
-            </div>
-
-            {/* Comments Section */}
-            <div className="mt-6">
-              <h3 className="text-lg font-medium mb-2">Comments</h3>
-              <div className="space-y-2">
-                {selectedPayment.comments?.map((comment, index) => (
-                  <div key={index} className="bg-gray-50 p-3 rounded">
-                    <p>{comment.text}</p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {new Date(comment.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                ))}
-                <div className="mt-4">
-                  <textarea
-                    className="w-full p-2 border rounded-md"
-                    placeholder="Add a comment..."
-                    rows={3}
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                  />
-                  <button
-                    onClick={handleAddComment}
-                    className="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                  >
-                    Add Comment
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
+        onCommentAdd={handleAddComment}
+      />
     </div>
   );
 };

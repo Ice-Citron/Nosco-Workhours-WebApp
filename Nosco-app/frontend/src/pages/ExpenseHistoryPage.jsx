@@ -24,59 +24,83 @@ const ExpenseHistoryPage = () => {
 
     useEffect(() => {
         fetchExpenses();
-    }, [user]);
+    }, [user?.uid]); // Add dependency on user.uid
 
     const fetchExpenses = async () => {
         try {
             if (!user?.uid) return;
-            console.log('Fetching expenses for user:', user.uid);
-
-            const expensesRef = collection(firestore, 'expenses');
+            console.log('Current user:', user);
+    
+            const expensesRef = collection(firestore, 'expense');
             const q = query(
                 expensesRef,
                 where('userID', '==', user.uid),
                 orderBy('date', 'desc')
             );
-
+    
             const snapshot = await getDocs(q);
-            console.log('Found documents:', snapshot.size);
-
+            console.log('Query response:', {
+                empty: snapshot.empty,
+                size: snapshot.size
+            });
+    
             const expensesData = await Promise.all(
                 snapshot.docs.map(async (docSnapshot) => {
                     const data = docSnapshot.data();
-                    console.log('Raw document data:', data);
-
-                    // Fetch project details if expense is linked to a project
+                    console.log('Processing document:', docSnapshot.id);
+    
+                    // Safely handle date conversions
+                    const safeToDate = (timestamp) => {
+                        try {
+                            return timestamp?.toDate() || new Date();
+                        } catch (error) {
+                            console.error('Date conversion error:', error);
+                            return new Date();
+                        }
+                    };
+    
+                    // Safely get project name
                     let projectName = 'General Expense';
-                    try {
-                        if (data.projectID) {
+                    if (data.projectID) {
+                        try {
                             const projectRef = doc(firestore, 'projects', data.projectID);
                             const projectDoc = await getDoc(projectRef);
                             if (projectDoc.exists()) {
                                 projectName = projectDoc.data().name;
                             }
+                        } catch (err) {
+                            console.error('Error fetching project:', err);
                         }
-                    } catch (err) {
-                        console.error('Error fetching project:', err);
                     }
-
-                    return {
+    
+                    // Create processed document with safe defaults
+                    const processedDoc = {
                         id: docSnapshot.id,
-                        ...data,
-                        date: data.date?.toDate() || new Date(),
-                        createdAt: data.createdAt?.toDate(),
-                        updatedAt: data.updatedAt?.toDate(),
-                        approvalDate: data.approvalDate?.toDate(),
+                        date: safeToDate(data.date),
+                        createdAt: safeToDate(data.createdAt),
+                        updatedAt: data.updatedAt ? safeToDate(data.updatedAt) : null,
+                        approvalDate: data.approvalDate ? safeToDate(data.approvalDate) : null,
+                        amount: parseFloat(data.amount) || 0,
+                        currency: data.currency || 'USD',
+                        expenseType: data.expenseType || 'Other',
+                        status: data.status || 'pending',
+                        description: data.description || '',
                         projectName,
-                        amount: parseFloat(data.amount) || 0
+                        pointsAwarded: data.pointsAwarded || 0,
+                        adminComments: data.adminComments || '',
+                        receipts: Array.isArray(data.receipts) ? data.receipts : []
                     };
+    
+                    console.log('Processed document:', processedDoc);
+                    return processedDoc;
                 })
             );
-
-            console.log('Processed expenses:', expensesData);
+    
+            console.log('Final processed expenses:', expensesData);
             setExpenses(expensesData);
+            setError(null);
         } catch (err) {
-            console.error('Detailed error:', err);
+            console.error('Error in fetchExpenses:', err);
             setError('Failed to fetch expense history');
         } finally {
             setLoading(false);
@@ -119,41 +143,58 @@ const ExpenseHistoryPage = () => {
         {
             header: 'Date',
             accessorKey: 'date',
-            cell: (info) => info.getValue().toLocaleDateString(),
+            cell: (info) => {
+                try {
+                    return info.getValue()?.toLocaleDateString() || 'N/A';
+                } catch (error) {
+                    console.error('Error formatting date:', error);
+                    return 'Invalid Date';
+                }
+            },
         },
         {
             header: 'Type',
             accessorKey: 'expenseType',
+            cell: (info) => info.getValue() || 'N/A',
         },
         {
             header: 'Amount',
             accessorKey: 'amount',
-            cell: (info) => (
-                <span>
-                    {info.getValue().toFixed(2)} {info.row.original.currency}
-                </span>
-            ),
+            cell: (info) => {
+                try {
+                    const amount = info.getValue();
+                    const currency = info.row?.original?.currency || 'USD';
+                    return `${amount?.toFixed(2) || '0.00'} ${currency}`;
+                } catch (error) {
+                    console.error('Error formatting amount:', error);
+                    return '0.00';
+                }
+            },
         },
         {
             header: 'Project',
             accessorKey: 'projectName',
+            cell: (info) => info.getValue() || 'N/A',
         },
         {
             header: 'Status',
             accessorKey: 'status',
-            cell: (info) => (
-                <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        info.getValue() === 'approved'
-                            ? 'bg-green-100 text-green-800'
-                            : info.getValue() === 'rejected'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                    }`}
-                >
-                    {info.getValue()}
-                </span>
-            ),
+            cell: (info) => {
+                const status = info.getValue();
+                return (
+                    <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            status === 'approved'
+                                ? 'bg-green-100 text-green-800'
+                                : status === 'rejected'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                        }`}
+                    >
+                        {status || 'pending'}
+                    </span>
+                );
+            },
         },
         {
             header: 'Points',
@@ -252,6 +293,13 @@ const ExpenseHistoryPage = () => {
             </div>
 
             <div className="bg-white rounded-lg shadow">
+                {/* Add this console.log here */}
+                {console.log('Data being passed to Table:', {
+                    paginatedData,
+                    columns,
+                    firstRow: paginatedData[0]
+                })}
+                
                 <Table
                     data={paginatedData}
                     columns={columns}
