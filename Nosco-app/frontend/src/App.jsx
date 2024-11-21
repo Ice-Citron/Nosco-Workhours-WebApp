@@ -88,7 +88,7 @@ const AuthenticatedApp = () => {
         
 
         {/* Admin Routes */}
-        <Route path="/admin" element={<AdminLayout />}>
+        <Route path="/admin" element={<ProtectedRoute> <AdminLayout /> </ProtectedRoute>}>
           <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
           <Route path="/admin/workers" element={<ProtectedRoute><WorkerManagementPage /></ProtectedRoute>} />
           <Route path="/admin/projects" element={<ProtectedRoute><ProjectManagementPage /></ProtectedRoute>} />
