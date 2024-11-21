@@ -1,11 +1,23 @@
 // src/components/dashboard/AdminDashboard.jsx
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom'; // Add Link import
 import { useAuth } from '../../context/AuthContext';
 
 const AdminDashboard = ({ metrics }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Navigation Links for the top menu
+  const navLinks = [
+    { title: "Workers", path: "/admin/workers" },
+    { title: "Projects", path: "/admin/projects" },
+    { title: "Work Hours", path: "/admin/approvals/work-hours" },
+    { title: "Expenses", path: "/admin/approvals/expenses" },
+    { title: "Payments", path: "/admin/payments" },
+    { title: "Reports", path: "/admin/reports" },
+    { title: "Project Invitations", path: "/admin/project-invitations" },
+    { title: "Settings", path: "/admin/settings" },
+  ];
 
   const quickActions = [
     { 
@@ -35,6 +47,19 @@ const AdminDashboard = ({ metrics }) => {
 
   return (
     <div className="space-y-6">
+      {/* Navigation Menu */}
+      <nav className="flex justify-center flex-wrap gap-2 mb-8">
+        {navLinks.map((link, index) => (
+          <Link
+            key={index}
+            to={link.path}
+            className="px-4 py-2 bg-white text-nosco-red border border-nosco-red rounded-full hover:bg-nosco-red hover:text-white transition duration-300 no-underline"
+          >
+            {link.title}
+          </Link>
+        ))}
+      </nav>
+
       {/* Welcome Section */}
       <div className="bg-white p-6 rounded-lg shadow">
         <h1 className="text-2xl font-bold text-gray-800">
