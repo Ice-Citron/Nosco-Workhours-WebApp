@@ -10,7 +10,6 @@ import RegistrationPage from './pages/RegistrationPage';
 import PasswordResetRequestPage from './pages/PasswordResetRequestPage';
 import ContactSupportPage from './pages/ContactSupportPage';
 import WorkerDashboardPage from './pages/WorkerDashboardPage';
-import AdminDashboardPage from './pages/AdminDashboardPage';
 import SubmitExpensePage from './pages/SubmitExpensePage';
 import LogHoursPage from './pages/LogHoursPage';
 import ReportsPage from './pages/ReportsPage';
@@ -29,6 +28,20 @@ import NotificationsPage from './pages/NotificationsPage';
 import RewardsPage from './pages/RewardsPage';
 import FeedbackPage from './pages/FeedbackPage';
 import ProjectInvitationsPage from './pages/ProjectInvitationsPage';
+
+import AdminLayout from './components/layout/AdminLayout';
+import AdminDashboardPage from './pages/admin/AdminDashboardPage';
+import WorkerManagementPage from './pages/admin/WorkerManagementPage';
+import ProjectManagementPage from './pages/admin/ProjectManagementPage';
+import PaymentProcessingPage from './pages/admin/PaymentProcessingPage';
+import AdminProjectInvitationsPage from './pages/admin/AdminProjectInvitationsPage';
+import WorkHoursApprovalPage from './pages/admin/WorkHoursApprovalPage';
+import ExpenseApprovalPage from './pages/admin/ExpenseApprovalPage';
+import ApprovalsLayout from './components/admin/approvals/ApprovalsLayout';
+import AdminSettingsLayout from './components/admin/settings/AdminSettingsLayout';
+import ExpenseTypeSettingsPage from './pages/admin/settings/ExpenseTypeSettingsPage';
+import CompanySettingsPage from './pages/admin/settings/CompanySettingsPage';
+import ExchangeRatesPage from './pages/admin/settings/ExchangeRatesPage';
 
 
 const AuthenticatedApp = () => {
@@ -75,9 +88,25 @@ const AuthenticatedApp = () => {
         
 
         {/* Admin Routes */}
-        <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
-        <Route path="/admin/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
-        <Route path="/admin/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
+          <Route path="/admin/workers" element={<ProtectedRoute><WorkerManagementPage /></ProtectedRoute>} />
+          <Route path="/admin/projects" element={<ProtectedRoute><ProjectManagementPage /></ProtectedRoute>} />
+          <Route path="/admin/approvals" element={<ProtectedRoute><ApprovalsLayout /></ProtectedRoute>}>
+            <Route index element={<Navigate to="work-hours" />} />
+            <Route path="work-hours" element={<WorkHoursApprovalPage />} />
+            <Route path="expenses" element={<ExpenseApprovalPage />} />
+          </Route>
+          <Route path="/admin/payments" element={<ProtectedRoute><PaymentProcessingPage /></ProtectedRoute>} />
+          <Route path="/admin/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
+          <Route path="/admin/project-invitations" element={<ProtectedRoute><AdminProjectInvitationsPage /></ProtectedRoute>} />
+          <Route path="/admin/settings/*" element={<ProtectedRoute><AdminSettingsLayout /></ProtectedRoute>}>
+            <Route index element={<Navigate to="expense-types" />} />
+            <Route path="expense-types" element={<ExpenseTypeSettingsPage />} />
+            <Route path="company" element={<CompanySettingsPage />} />
+            <Route path="exchange-rates" element={<ExchangeRatesPage />} />
+          </Route>
+        </Route>
 
         <Route path="*" element={<ErrorPage />} />
       </Routes>
