@@ -92,3 +92,12 @@ interface Feedback {
   adminID?: string;        // Optional ID of admin who responded
   responseAt?: Timestamp;   // Optional timestamp of admin response
 }
+
+interface ProjectInvitation {
+  userID: string;          // ID of worker being invited
+  projectID: string;       // Reference to projects collection
+  status: 'Pending' | 'Accepted' | 'Declined';  // Invitation status
+  invitationDate: Timestamp;
+  responseDate?: Timestamp;  // When worker accepts/declines
+  role: 'worker';           // Consistent with your projectAssignments
+}
