@@ -2,25 +2,52 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { submitFeedback } from '../../services/feedbackService';
 
-const FeedbackForm = ({ onFeedbackSubmitted }) => {
+const FeedbackForm = ({ onFeedbackSubmitted, isSubmitting: externalIsSubmitting }) => {
   const { user } = useAuth();
-  const [formData, setFormData] = useState({
-    subject: '',
-    message: '',
-  });
+  const [formData, setFormData] = useState({ subject: '', message: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState({});
   const [submitStatus, setSubmitStatus] = useState(null);
+
+  const validateField = (name, value) => {
+    if (name === 'subject') {
+      if (!value) return 'Subject is required';
+      if (value.length < 3) return 'Subject must be at least 3 characters';
+      if (value.length > 100) return 'Subject must be less than 100 characters';
+    }
+    if (name === 'message') {
+      if (!value) return 'Message is required';
+      if (value.length < 10) return 'Message must be at least 10 characters';
+      if (value.length > 1000) return 'Message must be less than 1000 characters';
+    }
+    return null;
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Clear error when user starts typing
+    const error = validateField(name, value);
+    setErrors(prev => ({ ...prev, [name]: error }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate all fields
+    const newErrors = {
+      subject: validateField('subject', formData.subject),
+      message: validateField('message', formData.message)
+    };
+    
+    setErrors(newErrors);
+    
+    // Check if there are any errors
+    if (Object.values(newErrors).some(error => error !== null)) {
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitStatus(null);
     
@@ -29,7 +56,7 @@ const FeedbackForm = ({ onFeedbackSubmitted }) => {
       setFormData({ subject: '', message: '' });
       setSubmitStatus('success');
       if (onFeedbackSubmitted) {
-        onFeedbackSubmitted();
+        await onFeedbackSubmitted();
       }
     } catch (error) {
       setSubmitStatus('error');
@@ -54,11 +81,14 @@ const FeedbackForm = ({ onFeedbackSubmitted }) => {
             type="text"
             value={formData.subject}
             onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-md"
-            required
-            maxLength={100}
-            disabled={isSubmitting}
+            className={`w-full px-3 py-2 border rounded-md ${
+              errors.subject ? 'border-red-500' : 'border-gray-300'
+            }`}
+            disabled={isSubmitting || externalIsSubmitting}
           />
+          {errors.subject && (
+            <p className="mt-1 text-sm text-red-500">{errors.subject}</p>
+          )}
         </div>
         
         <div>
@@ -70,19 +100,25 @@ const FeedbackForm = ({ onFeedbackSubmitted }) => {
             name="message"
             value={formData.message}
             onChange={handleChange}
-            className="w-full px-3 py-2 border rounded-md h-32"
-            required
-            maxLength={1000}
-            disabled={isSubmitting}
+            className={`w-full px-3 py-2 border rounded-md h-32 ${
+              errors.message ? 'border-red-500' : 'border-gray-300'
+            }`}
+            disabled={isSubmitting || externalIsSubmitting}
           />
+          {errors.message && (
+            <p className="mt-1 text-sm text-red-500">{errors.message}</p>
+          )}
+          <p className="mt-1 text-sm text-gray-500">
+            {formData.message.length}/1000 characters
+          </p>
         </div>
 
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || externalIsSubmitting || Object.keys(errors).length > 0}
           className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
         >
-          {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+          {isSubmitting || externalIsSubmitting ? 'Submitting...' : 'Submit Feedback'}
         </button>
       </form>
 

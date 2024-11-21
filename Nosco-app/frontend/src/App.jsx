@@ -28,6 +28,7 @@ import PaymentHistoryPage from './pages/PaymentHistoryPage';
 import NotificationsPage from './pages/NotificationsPage';
 import RewardsPage from './pages/RewardsPage';
 import FeedbackPage from './pages/FeedbackPage';
+import ProjectInvitationsPage from './pages/ProjectInvitationsPage';
 
 
 const AuthenticatedApp = () => {
@@ -69,6 +70,7 @@ const AuthenticatedApp = () => {
           <Route path="/worker/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
           <Route path="/worker/rewards" element={<ProtectedRoute><RewardsPage /></ProtectedRoute>} />
           <Route path="/worker/feedback" element={<ProtectedRoute><FeedbackPage /></ProtectedRoute>} />
+          <Route path="/worker/project-invitations" element={<ProtectedRoute><ProjectInvitationsPage /></ProtectedRoute>} />
         </Route>
         
 
