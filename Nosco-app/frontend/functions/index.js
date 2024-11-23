@@ -1,16 +1,18 @@
-const functions = require('firebase-functions');
-const cors = require('cors')({origin: true});
+// functions/index.js
+exports.setUserRole = functions.https.onCall(async (data, context) => {
+  // Only allow admin to set roles
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+  }
 
-exports.calculateFactorial = functions.https.onRequest((request, response) => {
-  cors(request, response, () => {
-    const number = parseInt(request.query.number);
-    if (isNaN(number) || number < 0) {
-      return response.status(400).json({ error: 'Invalid input. Please provide a non-negative integer.' });
-    }
-    let result = 1;
-    for (let i = 2; i <= number; i++) {
-      result *= i;
-    }
-    response.json({ result: result });
-  });
+  const { uid, role } = data;
+
+  try {
+    const user = await admin.auth().getUser(uid);
+    await admin.auth().setCustomUserClaims(uid, { role });
+    
+    return { success: true };
+  } catch (error) {
+    throw new functions.https.HttpsError('internal', error.message);
+  }
 });

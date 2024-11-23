@@ -1,43 +1,62 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, firestore } from '../firebase/firebase_config';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  signOut 
+} from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
+  const functions = getFunctions();
 
   useEffect(() => {
     console.log("Setting up auth state listener");
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log("Auth state changed. Firebase user:", firebaseUser);
-      setLoading(true);
+      
       if (firebaseUser) {
         try {
           const userDocRef = doc(firestore, 'users', firebaseUser.uid);
           const userDocSnap = await getDoc(userDocRef);
+          
+          if (!userDocSnap.exists()) {
+            console.error("User document doesn't exist");
+            setUser(null);
+            setAuthError("User data not found");
+            setLoading(false);
+            return;
+          }
+
           const userData = userDocSnap.data();
           
           const user = {
             uid: firebaseUser.uid,
-            name: firebaseUser.displayName || userData?.name || 'User',
+            name: userData?.name || 'User',
             email: firebaseUser.email,
             role: userData?.role || 'worker',
-            profilePic: firebaseUser.photoURL || userData?.profilePic || '../assets/images/default-pfp.png'
+            profilePic: userData?.profilePic || '../assets/images/default-pfp.png',
+            permissions: userData?.permissions || []
           };
+          
           console.log("Setting user state:", user);
           setUser(user);
-          localStorage.setItem('user', JSON.stringify(user));
+          setAuthError(null);
         } catch (error) {
           console.error("Error fetching user data:", error);
           setUser(null);
+          setAuthError("Error loading user data");
         }
       } else {
         console.log("No firebase user, setting user state to null");
         setUser(null);
-        localStorage.removeItem('user');
+        setAuthError(null);
       }
       setLoading(false);
     });
@@ -49,21 +68,35 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log("Attempting login for email:", email, "with role:", role);
       setLoading(true);
+      setAuthError(null);
+      
+      // First, just try to log in
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
       
+      // Get user document
       const userDocRef = doc(firestore, 'users', firebaseUser.uid);
-      await setDoc(userDocRef, {
-        email: firebaseUser.email,
-        role: role
-      }, { merge: true });
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+        throw new Error('User data not found');
+      }
 
-      console.log("Login successful. Firebase user:", firebaseUser);
-      // The user state will be set by the onAuthStateChanged listener
+      const userData = userDoc.data();
+      
+      // Verify role matches
+      if (role && userData.role !== role) {
+        await signOut(auth); // Sign out if role doesn't match
+        throw new Error(`Invalid role. Please use the correct login for your role.`);
+      }
+
+      return userData;
     } catch (error) {
       console.error("Error logging in:", error);
-      setLoading(false);
+      setAuthError(error.message);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -73,35 +106,26 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       await signOut(auth);
       console.log("Logout successful");
-      // The user state will be set to null by the onAuthStateChanged listener
     } catch (error) {
       console.error("Error logging out:", error);
-      setLoading(false);
+      setAuthError("Error during logout");
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
-  const updateUserProfilePic = async (newProfilePicUrl) => {
-    if (user) {
-      try {
-        const userDocRef = doc(firestore, 'users', user.uid);
-        await setDoc(userDocRef, { profilePic: newProfilePicUrl }, { merge: true });
-        
-        setUser(prevUser => ({
-          ...prevUser,
-          profilePic: newProfilePicUrl
-        }));
-        
-        localStorage.setItem('user', JSON.stringify({...user, profilePic: newProfilePicUrl}));
-        console.log("Profile picture updated successfully");
-      } catch (error) {
-        console.error("Error updating profile picture:", error);
-      }
-    }
+  const value = {
+    user,
+    loading,
+    error: authError,
+    login,
+    logout,
+    isAdmin: user?.role === 'admin'
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, updateUserProfilePic }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

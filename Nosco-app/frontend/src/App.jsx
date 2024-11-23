@@ -43,6 +43,8 @@ import ExpenseTypeSettingsPage from './pages/admin/settings/ExpenseTypeSettingsP
 import CompanySettingsPage from './pages/admin/settings/CompanySettingsPage';
 import ExchangeRatesPage from './pages/admin/settings/ExchangeRatesPage';
 
+import AdminProvider from './context/AdminContext';
+
 
 const AuthenticatedApp = () => {
   const { loading } = useAuth();
@@ -88,15 +90,15 @@ const AuthenticatedApp = () => {
         
 
         {/* Admin Routes */}
-        <Route path="/admin" element={<ProtectedRoute> <AdminLayout /> </ProtectedRoute>}>
+        <Route path="/admin" element={<ProtectedRoute> <AdminProvider> <AdminLayout /> </AdminProvider> </ProtectedRoute> }>
           <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
           <Route path="/admin/workers" element={<ProtectedRoute><WorkerManagementPage /></ProtectedRoute>} />
           <Route path="/admin/projects" element={<ProtectedRoute><ProjectManagementPage /></ProtectedRoute>} />
           <Route path="/admin/approvals" element={<ProtectedRoute><ApprovalsLayout /></ProtectedRoute>}>
             <Route index element={<Navigate to="work-hours" />} />
             <Route path="work-hours" element={<WorkHoursApprovalPage />} />
-            <Route path="expenses" element={<ExpenseApprovalPage />} />
           </Route>
+          <Route path="/admin/expense-approvals" element={<ProtectedRoute><ExpenseApprovalPage /></ProtectedRoute>} />
           <Route path="/admin/payments" element={<ProtectedRoute><PaymentProcessingPage /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/admin/project-invitations" element={<ProtectedRoute><AdminProjectInvitationsPage /></ProtectedRoute>} />
