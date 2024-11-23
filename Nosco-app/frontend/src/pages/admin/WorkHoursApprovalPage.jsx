@@ -1,11 +1,13 @@
-// src/pages/admin/WorkHoursApprovalPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { adminWorkHoursService } from '../../services/adminWorkHoursService';
+import { collection, getDocs } from 'firebase/firestore';
+import { firestore as db } from '../../firebase/firebase_config';
 import Button from '../../components/common/Button';
 import WorkHoursTable from '../../components/admin/approvals/WorkHoursTable';
 import WorkHoursDetailsModal from '../../components/admin/approvals/WorkHoursDetailsModal';
 import RejectionReasonModal from '../../components/admin/approvals/RejectionReasonModal';
+import WorkHoursFilterModal from '../../components/admin/approvals/WorkHoursFilterModal';
 
 const WorkHoursApprovalPage = () => {
   const { user } = useAuth();
@@ -17,17 +19,60 @@ const WorkHoursApprovalPage = () => {
   const [rejectingId, setRejectingId] = useState(null);
   const [isBulkRejection, setIsBulkRejection] = useState(false);
   const [error, setError] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('pending');
+
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [activeFilters, setActiveFilters] = useState({});
+  const [projects, setProjects] = useState([]);
+  const [workers, setWorkers] = useState([]);
 
   useEffect(() => {
-    fetchWorkHours();
-  }, []);
+    fetchData();
+  }, [statusFilter]);
+
+  const fetchData = async () => {
+    await Promise.all([
+      fetchWorkHours(),
+      fetchProjects(),
+      fetchWorkers()
+    ]);
+  };
+
+  const fetchProjects = async () => {
+    try {
+      const projectsSnapshot = await getDocs(collection(db, 'projects'));
+      const projectsData = projectsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setProjects(projectsData);
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    }
+  };
+
+  const fetchWorkers = async () => {
+    try {
+      const workersSnapshot = await getDocs(collection(db, 'users'));
+      const workersData = workersSnapshot.docs
+        .filter(doc => doc.data().role === 'worker')
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      setWorkers(workersData);
+    } catch (error) {
+      console.error('Error fetching workers:', error);
+    }
+  };
 
   const fetchWorkHours = async () => {
     try {
       setLoading(true);
-      const data = await adminWorkHoursService.getPendingWorkHours();
+      const data = await adminWorkHoursService.getWorkHours(statusFilter, activeFilters);
       setWorkHours(data);
       setError(null);
+      setSelectedIds([]);
     } catch (err) {
       setError('Failed to load work hours');
       console.error('Error loading work hours:', err);
@@ -47,7 +92,6 @@ const WorkHoursApprovalPage = () => {
       setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
     } catch (err) {
       console.error('Error approving work hours:', err);
-      // TODO: Add error notification
     }
   };
 
@@ -58,7 +102,6 @@ const WorkHoursApprovalPage = () => {
       setSelectedIds([]);
     } catch (err) {
       console.error('Error bulk approving work hours:', err);
-      // TODO: Add error notification
     }
   };
 
@@ -88,8 +131,12 @@ const WorkHoursApprovalPage = () => {
       setIsBulkRejection(false);
     } catch (err) {
       console.error('Error rejecting work hours:', err);
-      // TODO: Add error notification
     }
+  };
+
+  const handleApplyFilters = async (filters) => {
+    setActiveFilters(filters);
+    await fetchWorkHours();
   };
 
   if (loading) {
@@ -108,39 +155,39 @@ const WorkHoursApprovalPage = () => {
     );
   }
 
+  const pendingCount = workHours.filter(wh => wh.status === 'pending').length;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Work Hours Approval</h1>
+          <h1 className="text-2xl font-semibold">Work Hours Management</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {workHours.length} pending approval{workHours.length !== 1 ? 's' : ''}
+            {pendingCount} pending approval{pendingCount !== 1 ? 's' : ''}
           </p>
         </div>
-        
-        {selectedIds.length > 0 && (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-500">
-              {selectedIds.length} selected
-            </span>
-            <Button
-              onClick={handleBulkApprove}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              Approve Selected
-            </Button>
-            <Button
-              onClick={handleBulkReject}
-              className="bg-nosco-red hover:bg-nosco-red-dark"
-            >
-              Reject Selected
-            </Button>
-          </div>
-        )}
+
+        <div className="flex items-center gap-4">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-nosco-red focus:border-transparent"
+          >
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+
+          <button
+            onClick={() => setShowFilterModal(true)}
+            className="px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm text-sm hover:bg-gray-50"
+          >
+            {Object.keys(activeFilters).length > 0 ? 'Filters Active' : 'Filters'}
+          </button>
+        </div>
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-lg shadow-sm">
         <WorkHoursTable
           workHours={workHours}
@@ -153,12 +200,11 @@ const WorkHoursApprovalPage = () => {
 
         {workHours.length === 0 && (
           <div className="text-center py-12 text-gray-500">
-            No pending work hours to approve
+            No work hours found for the selected filter
           </div>
         )}
       </div>
 
-      {/* Modals */}
       <WorkHoursDetailsModal
         isOpen={!!detailsModalData}
         onClose={() => setDetailsModalData(null)}
@@ -174,6 +220,15 @@ const WorkHoursApprovalPage = () => {
         }}
         onConfirm={handleRejectConfirm}
         isBulk={isBulkRejection}
+      />
+
+      <WorkHoursFilterModal
+        isOpen={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        onApplyFilters={handleApplyFilters}
+        projects={projects}
+        workers={workers}
+        activeFilters={activeFilters}  // Add this line
       />
     </div>
   );
