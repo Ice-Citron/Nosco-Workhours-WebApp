@@ -3,39 +3,37 @@ import React, { useState, useEffect } from 'react';
 import { adminExpenseService } from '../../../../services/adminExpenseService';
 
 const ExpenseFilterModal = ({ isOpen, onClose, onApplyFilters, activeFilters }) => {
+  // Initialize filters with activeFilters when modal opens
   const [filters, setFilters] = useState({
     dateRange: {
       start: '',
       end: ''
     },
     expenseType: '',
-    worker: '',
+    expenseCategory: '',
     amount: {
       min: '',
       max: ''
     }
   });
-  const [expenseTypes, setExpenseTypes] = useState([]);
 
+  // Update filters when modal opens or activeFilters change
   useEffect(() => {
-    if (isOpen) {
-      loadExpenseTypes();
-      // Reset to active filters when modal opens
+    if (isOpen && activeFilters) {
       setFilters(prev => ({
-        ...prev,
-        ...activeFilters
+        dateRange: {
+          start: activeFilters.dateRange?.start || '',
+          end: activeFilters.dateRange?.end || ''
+        },
+        expenseType: activeFilters.expenseType || '',
+        expenseCategory: activeFilters.expenseCategory || '',
+        amount: {
+          min: activeFilters.amount?.min || '',
+          max: activeFilters.amount?.max || ''
+        }
       }));
     }
   }, [isOpen, activeFilters]);
-
-  const loadExpenseTypes = async () => {
-    try {
-      const types = await adminExpenseService.getExpenseTypes();
-      setExpenseTypes(types);
-    } catch (error) {
-      console.error('Error loading expense types:', error);
-    }
-  };
 
   const handleReset = () => {
     setFilters({
@@ -44,7 +42,7 @@ const ExpenseFilterModal = ({ isOpen, onClose, onApplyFilters, activeFilters }) 
         end: ''
       },
       expenseType: '',
-      worker: '',
+      expenseCategory: '',
       amount: {
         min: '',
         max: ''
@@ -53,35 +51,30 @@ const ExpenseFilterModal = ({ isOpen, onClose, onApplyFilters, activeFilters }) 
   };
 
   const handleApply = () => {
-    // Clean up empty filters
-    const cleanFilters = {};
+    // Only include non-empty filters
+    const appliedFilters = {};
     
-    if (filters.dateRange.start) {
-      cleanFilters.dateRange = { start: filters.dateRange.start };
+    if (filters.dateRange.start || filters.dateRange.end) {
+      appliedFilters.dateRange = {};
+      if (filters.dateRange.start) appliedFilters.dateRange.start = filters.dateRange.start;
+      if (filters.dateRange.end) appliedFilters.dateRange.end = filters.dateRange.end;
     }
-    if (filters.dateRange.end) {
-      cleanFilters.dateRange = { 
-        ...cleanFilters.dateRange,
-        end: filters.dateRange.end 
-      };
+    
+    if (filters.expenseType !== '') {
+      appliedFilters.expenseType = filters.expenseType;
     }
-    if (filters.expenseType) {
-      cleanFilters.expenseType = filters.expenseType;
+    
+    if (filters.expenseCategory !== '') {
+      appliedFilters.expenseCategory = filters.expenseCategory;
     }
-    if (filters.worker) {
-      cleanFilters.worker = filters.worker;
-    }
-    if (filters.amount.min) {
-      cleanFilters.amount = { min: parseFloat(filters.amount.min) };
-    }
-    if (filters.amount.max) {
-      cleanFilters.amount = { 
-        ...cleanFilters.amount,
-        max: parseFloat(filters.amount.max) 
-      };
+    
+    if (filters.amount.min || filters.amount.max) {
+      appliedFilters.amount = {};
+      if (filters.amount.min) appliedFilters.amount.min = filters.amount.min;
+      if (filters.amount.max) appliedFilters.amount.max = filters.amount.max;
     }
 
-    onApplyFilters(cleanFilters);
+    onApplyFilters(appliedFilters);
     onClose();
   };
 
@@ -128,22 +121,40 @@ const ExpenseFilterModal = ({ isOpen, onClose, onApplyFilters, activeFilters }) 
                 </div>
               </div>
 
-              {/* Expense Type */}
+              {/* Expense Category (Company vs Worker) */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Expense Type</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Expense Category
+                </label>
+                <select
+                  value={filters.expenseCategory}
+                  onChange={(e) => setFilters(prev => ({ ...prev, expenseCategory: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-nosco-red focus:border-nosco-red"
+                >
+                  <option value="">All Categories</option>
+                  <option value="company">Company Expenses</option>
+                  <option value="worker">Worker Expenses</option>
+                </select>
+              </div>
+
+              {/* Specific Expense Types */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Expense Type
+                </label>
                 <select
                   value={filters.expenseType}
                   onChange={(e) => setFilters(prev => ({ ...prev, expenseType: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-nosco-red focus:border-nosco-red"
                 >
                   <option value="">All Types</option>
-                  {expenseTypes.map(type => (
-                    <option key={type.id} value={type.name}>
-                      {type.name}
-                    </option>
-                  ))}
+                  <option value="Office Supplies">Office Supplies</option>
+                  <option value="Plane Tickets">Plane Tickets</option>
+                  <option value="Transportation">Transportation</option>
+                  {/* Add other expense types as needed */}
                 </select>
               </div>
+
 
               {/* Amount Range */}
               <div className="grid grid-cols-2 gap-4">

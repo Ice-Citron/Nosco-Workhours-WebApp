@@ -234,23 +234,6 @@ export const adminExpenseService = {
     }
   },
  
-  // Reject expense
-  rejectExpense: async (expenseId, adminId, rejectionReason) => {
-    try {
-      const expenseRef = doc(db, 'expense', expenseId);
-      await updateDoc(expenseRef, {
-        status: 'rejected',
-        approvedBy: adminId,
-        approvalDate: Timestamp.now(),
-        rejectionReason,
-        updatedAt: Timestamp.now()
-      });
-    } catch (error) {
-      console.error('Error rejecting expense:', error);
-      throw error;
-    }
-  },
- 
   // Bulk approve expenses
   bulkApproveExpenses: async (expenseIds, adminId) => {
     try {
@@ -339,7 +322,263 @@ export const adminExpenseService = {
       console.error('Error fetching projects:', error);
       throw error;
     }
-  }
+  },
+
+  getAllExpenses: async (filters = {}) => {
+    try {
+      let constraints = [];
+  
+      // Add status filter
+      if (filters.status && filters.status !== 'all') {
+        constraints.push(where('status', '==', filters.status));
+      }
+  
+      // Add other filters
+      if (filters.expenseType) {
+        constraints.push(where('expenseType', '==', filters.expenseType));
+      }
+  
+      if (filters.dateRange?.start) {
+        constraints.push(
+          where('date', '>=', Timestamp.fromDate(new Date(filters.dateRange.start)))
+        );
+      }
+  
+      if (filters.dateRange?.end) {
+        constraints.push(
+          where('date', '<=', Timestamp.fromDate(new Date(filters.dateRange.end)))
+        );
+      }
+  
+      // Query expenses
+      const q = query(
+        collection(db, 'expense'),
+        ...constraints,
+        orderBy('date', 'desc')
+      );
+  
+      const snapshot = await getDocs(q);
+      const expenses = [];
+  
+      for (const docSnapshot of snapshot.docs) {
+        const data = docSnapshot.data();
+        
+        // Get worker details for worker expenses
+        let workerData = null;
+        if (data.userID && !data.isGeneralExpense) {
+          const userDoc = await getDoc(doc(db, 'users', data.userID));
+          if (userDoc.exists()) {
+            workerData = userDoc.data();
+          }
+        }
+        
+        // Get project details if projectID exists
+        let projectData = null;
+        if (data.projectID) {
+          const projectDoc = await getDoc(doc(db, 'projects', data.projectID));
+          if (projectDoc.exists()) {
+            projectData = projectDoc.data();
+          }
+        }
+  
+        expenses.push({
+          id: docSnapshot.id,
+          ...data,
+          worker: workerData,
+          project: projectData
+        });
+      }
+  
+      return expenses;
+    } catch (error) {
+      console.error('Error fetching all expenses:', error);
+      throw error;
+    }
+  },
+
+  // Update to handle both general and worker expense creation
+  createExpense: async (expenseData, adminId) => {
+    try {
+      const docRef = await addDoc(collection(db, 'expense'), {
+        ...expenseData,
+        isGeneralExpense: expenseData.isGeneralExpense || false,
+        status: 'approved',
+        approvedBy: adminId,
+        approvalDate: Timestamp.now(),
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        date: Timestamp.fromDate(new Date(expenseData.date)),
+        userID: expenseData.isGeneralExpense ? adminId : expenseData.userID,
+        amount: parseFloat(expenseData.amount),
+        pointsAwarded: !expenseData.isGeneralExpense ? Math.floor((parseFloat(expenseData.amount) / 50) * 2) / 2 : null,
+        currency: expenseData.currency || 'USD',
+        receipts: expenseData.receipts || [], // Add this line
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating expense:', error);
+      throw error;
+    }
+  },
+
+  // Update your existing updateExpense method
+  updateExpense: async (expenseId, expenseData, adminId) => {
+    try {
+      const expenseRef = doc(db, 'expense', expenseId);
+      const currentExpense = await getDoc(expenseRef);
+
+      if (!currentExpense.exists()) {
+        throw new Error('Expense not found');
+      }
+
+      const updateData = {
+        ...expenseData,
+        updatedAt: Timestamp.now(),
+        updatedBy: adminId
+      };
+
+      if (expenseData.date) {
+        updateData.date = Timestamp.fromDate(new Date(expenseData.date));
+      }
+
+      if (expenseData.amount) {
+        updateData.amount = parseFloat(expenseData.amount);
+      }
+
+      if (!expenseData.isGeneralExpense && expenseData.amount) {
+        updateData.pointsAwarded = Math.floor((parseFloat(expenseData.amount) / 50) * 2) / 2;
+      }
+
+      // Handle receipts update if provided
+      if (expenseData.receipts) {
+        updateData.receipts = expenseData.receipts;
+      }
+
+      await updateDoc(expenseRef, updateData);
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      throw error;
+    }
+  },
+
+  // Reject an expense with proper status updates
+  rejectExpense: async (expenseId, adminId, rejectionReason) => {
+    try {
+      const expenseRef = doc(db, 'expense', expenseId);
+      await updateDoc(expenseRef, {
+        status: 'rejected',
+        rejectionReason,
+        rejectedBy: adminId,
+        rejectedAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        updatedBy: adminId,
+        // Clear approval data
+        approvedBy: null,
+        approvalDate: null
+      });
+    } catch (error) {
+      console.error('Error rejecting expense:', error);
+      throw error;
+    }
+  },
+
+  // Restore a rejected expense to approved
+  restoreExpense: async (expenseId, adminId) => {
+    try {
+      const expenseRef = doc(db, 'expense', expenseId);
+      await updateDoc(expenseRef, {
+        status: 'approved',
+        rejectionReason: null,
+        rejectedBy: null,
+        rejectedAt: null,
+        approvedBy: adminId,
+        approvalDate: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        updatedBy: adminId
+      });
+    } catch (error) {
+      console.error('Error restoring expense:', error);
+      throw error;
+    }
+  },
+
+  // Get a single expense by ID with all related data
+  getExpenseById: async (expenseId) => {
+    try {
+      const expenseRef = doc(db, 'expense', expenseId);
+      const expenseDoc = await getDoc(expenseRef);
+
+      if (!expenseDoc.exists()) {
+        throw new Error('Expense not found');
+      }
+
+      const expenseData = expenseDoc.data();
+
+      // Get worker details if it's a worker expense
+      let workerData = null;
+      if (expenseData.userID && !expenseData.isGeneralExpense) {
+        const userDoc = await getDoc(doc(db, 'users', expenseData.userID));
+        if (userDoc.exists()) {
+          workerData = userDoc.data();
+        }
+      }
+
+      // Get project details if exists
+      let projectData = null;
+      if (expenseData.projectID) {
+        const projectDoc = await getDoc(doc(db, 'projects', expenseData.projectID));
+        if (projectDoc.exists()) {
+          projectData = projectDoc.data();
+        }
+      }
+
+      return {
+        id: expenseDoc.id,
+        ...expenseData,
+        worker: workerData,
+        project: projectData
+      };
+    } catch (error) {
+      console.error('Error fetching expense:', error);
+      throw error;
+    }
+  },
+
+  updateExpenseReceipts: async (expenseId, receiptUrls) => {
+    try {
+      const expenseRef = doc(db, 'expense', expenseId);
+      await updateDoc(expenseRef, {
+        receipts: receiptUrls,
+        updatedAt: Timestamp.now()
+      });
+    } catch (error) {
+      console.error('Error updating expense receipts:', error);
+      throw error;
+    }
+  },
+  
+  // Delete receipt from expense
+  deleteExpenseReceipt: async (expenseId, receiptUrl) => {
+    try {
+      const expenseRef = doc(db, 'expense', expenseId);
+      const expenseDoc = await getDoc(expenseRef);
+      
+      if (!expenseDoc.exists()) {
+        throw new Error('Expense not found');
+      }
+  
+      const currentReceipts = expenseDoc.data().receipts || [];
+      const updatedReceipts = currentReceipts.filter(url => url !== receiptUrl);
+  
+      await updateDoc(expenseRef, {
+        receipts: updatedReceipts,
+        updatedAt: Timestamp.now()
+      });
+    } catch (error) {
+      console.error('Error deleting expense receipt:', error);
+      throw error;
+    }
+  },
  };
  
  export default adminExpenseService;
