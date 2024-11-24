@@ -8,7 +8,8 @@ import {
   doc,
   updateDoc,
   Timestamp,
-  orderBy 
+  orderBy,
+  writeBatch 
 } from 'firebase/firestore';
 
 export const adminWorkHoursService = {
@@ -153,10 +154,10 @@ export const adminWorkHoursService = {
 
   bulkApproveWorkHours: async (workHourIds, adminId) => {
     try {
-      const batch = db.batch();
+      const batch = writeBatch(db);
       const now = Timestamp.now();
 
-      workHourIds.forEach(id => {
+      for (const id of workHourIds) {
         const ref = doc(db, 'workHours', id);
         batch.update(ref, {
           status: 'approved',
@@ -164,7 +165,7 @@ export const adminWorkHoursService = {
           approvalDate: now,
           updatedAt: now
         });
-      });
+      }
 
       await batch.commit();
     } catch (error) {
@@ -175,10 +176,10 @@ export const adminWorkHoursService = {
 
   bulkRejectWorkHours: async (workHourIds, adminId, rejectionReason) => {
     try {
-      const batch = db.batch();
+      const batch = writeBatch(db);
       const now = Timestamp.now();
 
-      workHourIds.forEach(id => {
+      for (const id of workHourIds) {
         const ref = doc(db, 'workHours', id);
         batch.update(ref, {
           status: 'rejected',
@@ -187,7 +188,7 @@ export const adminWorkHoursService = {
           rejectionReason,
           updatedAt: now
         });
-      });
+      }
 
       await batch.commit();
     } catch (error) {

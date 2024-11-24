@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import Modal from '../../common/Modal';
-import Button from '../../common/Button';
 
 const RejectionReasonModal = ({ isOpen, onClose, onConfirm, isBulk = false }) => {
   const [reason, setReason] = useState('');
@@ -17,42 +16,40 @@ const RejectionReasonModal = ({ isOpen, onClose, onConfirm, isBulk = false }) =>
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Reject ${isBulk ? 'Selected' : ''} Work Hours`}
+      title={`Reject Selected Work Hours`}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label 
-            htmlFor="rejectionReason" 
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
+      <div className="p-6">
+        <div className="mb-6">
+          <h3 className="text-base font-medium text-gray-900 mb-2">
             Reason for Rejection
-          </label>
+          </h3>
           <textarea
-            id="rejectionReason"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-nosco-red focus:border-nosco-red"
+            className="w-full h-32 px-3 py-2 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-nosco-red focus:border-transparent"
             placeholder="Please provide a reason for rejection..."
             required
           />
         </div>
 
         <div className="flex justify-end gap-3">
-          <Button
+          <button
+            type="button"
             onClick={onClose}
-            className="bg-gray-100 text-gray-700 hover:bg-gray-200"
+            className="px-6 py-2 bg-nosco-red text-white font-medium rounded-lg hover:bg-nosco-red-dark"
           >
             Cancel
-          </Button>
-          <Button
-            type="submit"
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
             disabled={!reason.trim()}
-            className="bg-nosco-red hover:bg-nosco-red-dark"
+            className="px-6 py-2 bg-[#D88C8C] text-white font-medium rounded-lg hover:bg-[#C77C7C] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Confirm Rejection
-          </Button>
+          </button>
         </div>
-      </form>
+      </div>
     </Modal>
   );
 };

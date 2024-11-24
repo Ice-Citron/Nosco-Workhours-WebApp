@@ -1,9 +1,10 @@
+// ExpenseTable.jsx
 import React from 'react';
-import Table from '../../common/Table';
+import Table from '../../../common/Table';
 import { format } from 'date-fns';
 
-const WorkHoursTable = ({ 
-  workHours, 
+const ExpenseTable = ({ 
+  expenses, 
   selectedIds, 
   onSelect, 
   onViewDetails,
@@ -16,10 +17,10 @@ const WorkHoursTable = ({
       header: (
         <input
           type="checkbox"
-          checked={selectedIds.length === workHours.length && workHours.length > 0}
+          checked={selectedIds.length === expenses.length && expenses.length > 0}
           onChange={(e) => {
             if (e.target.checked) {
-              onSelect(workHours.map(wh => wh.id));
+              onSelect(expenses.map(exp => exp.id));
             } else {
               onSelect([]);
             }
@@ -53,9 +54,18 @@ const WorkHoursTable = ({
       )
     },
     {
-      accessorKey: 'project',
-      header: 'PROJECT',
-      cell: ({ row }) => row.original.project?.name
+      accessorKey: 'expenseType',
+      header: 'EXPENSE TYPE',
+      cell: ({ row }) => row.original.expenseType
+    },
+    {
+      accessorKey: 'amount',
+      header: 'AMOUNT',
+      cell: ({ row }) => (
+        <div className="font-medium">
+          {row.original.amount.toFixed(2)} {row.original.currency}
+        </div>
+      )
     },
     {
       accessorKey: 'date',
@@ -63,21 +73,10 @@ const WorkHoursTable = ({
       cell: ({ row }) => format(row.original.date.toDate(), 'MMM d, yyyy')
     },
     {
-      accessorKey: 'hours',
-      header: 'HOURS',
-      cell: ({ row }) => {
-        const totalHours = 
-          (row.original.regularHours || 0) + 
-          (row.original.overtime15x || 0) + 
-          (row.original.overtime20x || 0);
-        return totalHours.toFixed(1);
-      }
-    },
-    {
-      accessorKey: 'remarks',
-      header: 'REMARKS',
+      accessorKey: 'description',
+      header: 'DESCRIPTION',
       cell: ({ row }) => (
-        <div className="max-w-xs truncate">{row.original.remarks || '-'}</div>
+        <div className="max-w-xs truncate">{row.original.description || '-'}</div>
       )
     },
     {
@@ -112,7 +111,7 @@ const WorkHoursTable = ({
           </button>
           <button
             onClick={() => onViewDetails(row.original)}
-            className="px-3 py-1 text-sm rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors duration-200"
+            className="px-3 py-1 text-sm rounded bg-gray-50 text-nosco-red hover:bg-gray-100 transition-colors duration-200"
           >
             Details
           </button>
@@ -121,7 +120,7 @@ const WorkHoursTable = ({
     }
   ];
 
-  return <Table columns={columns} data={workHours} />;
+  return <Table columns={columns} data={expenses} />;
 };
 
-export default WorkHoursTable;
+export default ExpenseTable;

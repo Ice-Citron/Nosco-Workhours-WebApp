@@ -95,42 +95,51 @@ const WorkHoursApprovalPage = () => {
     }
   };
 
-  const handleBulkApprove = async () => {
-    try {
-      await adminWorkHoursService.bulkApproveWorkHours(selectedIds, user.uid);
-      await fetchWorkHours();
-      setSelectedIds([]);
-    } catch (err) {
-      console.error('Error bulk approving work hours:', err);
-    }
-  };
-
   const handleReject = (id) => {
     setRejectingId(id);
     setIsBulkRejection(false);
     setShowRejectionModal(true);
   };
 
+  
+  const handleBulkApprove = async () => {
+    try {
+      setLoading(true);
+      await adminWorkHoursService.bulkApproveWorkHours(selectedIds, user.uid);
+      await fetchWorkHours(); // Refresh the data
+      setSelectedIds([]); // Clear selections
+    } catch (err) {
+      console.error('Error bulk approving work hours:', err);
+      setError('Failed to approve selected work hours');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   const handleBulkReject = () => {
+    if (selectedIds.length === 0) return;
     setIsBulkRejection(true);
     setShowRejectionModal(true);
   };
-
+  
   const handleRejectConfirm = async (reason) => {
     try {
+      setLoading(true);
       if (isBulkRejection) {
         await adminWorkHoursService.bulkRejectWorkHours(selectedIds, user.uid, reason);
-        setSelectedIds([]);
       } else {
         await adminWorkHoursService.rejectWorkHours(rejectingId, user.uid, reason);
-        setSelectedIds(prev => prev.filter(id => id !== rejectingId));
       }
-      await fetchWorkHours();
+      await fetchWorkHours(); // Refresh the data
+      setSelectedIds([]); // Clear selections
       setShowRejectionModal(false);
       setRejectingId(null);
       setIsBulkRejection(false);
     } catch (err) {
       console.error('Error rejecting work hours:', err);
+      setError('Failed to reject work hours');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -161,30 +170,52 @@ const WorkHoursApprovalPage = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Work Hours Management</h1>
-          <p className="text-sm text-gray-500 mt-1">
+            <h1 className="text-2xl font-semibold">Work Hours Management</h1>
+            <p className="text-sm text-gray-500 mt-1">
             {pendingCount} pending approval{pendingCount !== 1 ? 's' : ''}
-          </p>
+            </p>
         </div>
 
         <div className="flex items-center gap-4">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-nosco-red focus:border-transparent"
-          >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
+            <div className="flex gap-2">
+            <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-nosco-red focus:border-transparent"
+            >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+            </select>
 
-          <button
-            onClick={() => setShowFilterModal(true)}
-            className="px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm text-sm hover:bg-gray-50"
-          >
-            {Object.keys(activeFilters).length > 0 ? 'Filters Active' : 'Filters'}
-          </button>
+            <button
+                onClick={() => setShowFilterModal(true)}
+                className="px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm text-sm hover:bg-gray-50"
+            >
+                {Object.keys(activeFilters).length > 0 ? 'Filters Active' : 'Filters'}
+            </button>
+            </div>
+
+            {selectedIds.length > 0 && (
+            <div className="flex items-center gap-3 ml-4">
+                <span className="text-sm text-gray-500">
+                {selectedIds.length} selected
+                </span>
+                <Button
+                onClick={handleBulkApprove}
+                className="bg-green-600 hover:bg-green-700"
+                >
+                Approve Selected
+                </Button>
+                <Button
+                onClick={handleBulkReject}
+                className="bg-nosco-red hover:bg-nosco-red-dark"
+                >
+                Reject Selected
+                </Button>
+            </div>
+            )}
         </div>
       </div>
 

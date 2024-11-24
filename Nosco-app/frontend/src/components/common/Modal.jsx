@@ -12,11 +12,13 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 
   return (
     <div 
-      className="fixed inset-0 z-50 overflow-y-auto bg-gray-500 bg-opacity-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 overflow-y-auto bg-gray-800 bg-opacity-70 flex items-center justify-center m-0" // Added m-0
       onClick={handleOverlayClick}
     >
-      <div className="relative bg-white rounded-lg w-full max-w-2xl mx-auto my-8" 
-           onClick={e => e.stopPropagation()}>
+      <div 
+        className="relative bg-white rounded-lg w-full max-w-2xl m-0" // Removed mx-auto my-8, added m-0
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
