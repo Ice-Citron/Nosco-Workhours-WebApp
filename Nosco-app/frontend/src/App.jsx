@@ -45,6 +45,7 @@ import ExchangeRatesPage from './pages/admin/settings/ExchangeRatesPage';
 
 import AdminProvider from './context/AdminContext';
 import AdminExpensePage from './pages/admin/AdminExpensePage';
+import WorkerPaymentDetailsPage from './pages/admin/WorkerPaymentDetailsPage';
 
 
 
@@ -103,6 +104,7 @@ const AuthenticatedApp = () => {
           </Route>
           
           <Route path="/admin/payments" element={<ProtectedRoute><PaymentProcessingPage /></ProtectedRoute>} />
+          <Route path="/admin/payments/worker/:workerId" element={<ProtectedRoute><WorkerPaymentDetailsPage /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/admin/project-invitations" element={<ProtectedRoute><AdminProjectInvitationsPage /></ProtectedRoute>} />
           <Route path="/admin/settings/*" element={<ProtectedRoute><AdminSettingsLayout /></ProtectedRoute>}>
