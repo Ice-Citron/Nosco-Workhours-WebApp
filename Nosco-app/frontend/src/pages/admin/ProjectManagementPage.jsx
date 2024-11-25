@@ -3,8 +3,10 @@ import { format } from 'date-fns';
 import AddProjectForm from '../../components/admin/projects/AddProjectForm';
 import ProjectDetailsModal from '../../components/admin/projects/ProjectDetailsModal';
 import { adminProjectService } from '../../services/adminProjectService';
+import { useNavigate } from 'react-router-dom';
 
 const ProjectManagementPage = () => {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -42,6 +44,10 @@ const ProjectManagementPage = () => {
   const handleViewDetails = (project) => {
     setSelectedProject(project);
     setShowDetailsModal(true);
+  };
+
+  const handleManage = (projectId) => {
+    navigate(`/admin/projects/${projectId}/management`);
   };
 
   if (loading) {
@@ -107,10 +113,10 @@ const ProjectManagementPage = () => {
                 <td className="p-4">
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => handleViewDetails(project)}
+                      onClick={() => handleManage(project.id)}
                       className="px-4 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors duration-200"
                     >
-                      Details
+                      Manage
                     </button>
                     {project.status === 'active' && (
                       <button

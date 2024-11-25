@@ -64,23 +64,6 @@ export const adminUserService = {
     }
   },
 
-  // Get single worker details
-  getWorkerDetails: async (workerId) => {
-    try {
-      const workerDoc = await firestore.collection('users').doc(workerId).get();
-      if (!workerDoc.exists) {
-        throw new Error('Worker not found');
-      }
-      return {
-        id: workerDoc.id,
-        ...workerDoc.data()
-      };
-    } catch (error) {
-      console.error('Error fetching worker details:', error);
-      throw error;
-    }
-  },
-
   // Update worker details
   updateWorkerDetails: async (workerId, data) => {
     try {
@@ -93,5 +76,47 @@ export const adminUserService = {
       console.error('Error updating worker details:', error);
       throw error;
     }
-  }
+  },
+
+  getActiveWorkers: async () => {
+    try {
+      const usersRef = collection(firestore, 'users');
+      const q = query(
+        usersRef,
+        where('role', '==', 'worker'),
+        where('status', '==', 'active')
+      );
+      
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('Error fetching active workers:', error);
+      throw error;
+    }
+  },
+
+  // Get worker details by ID
+  getWorkerDetails: async (workerId) => {
+    try {
+      const userDoc = await firestore
+        .collection('users')
+        .doc(workerId)
+        .get();
+
+      if (!userDoc.exists()) {
+        throw new Error('Worker not found');
+      }
+
+      return {
+        id: userDoc.id,
+        ...userDoc.data()
+      };
+    } catch (error) {
+      console.error('Error fetching worker details:', error);
+      throw error;
+    }
+  },
 };

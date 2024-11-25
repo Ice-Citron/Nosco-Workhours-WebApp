@@ -46,6 +46,7 @@ import ExchangeRatesPage from './pages/admin/settings/ExchangeRatesPage';
 import AdminProvider from './context/AdminContext';
 import AdminExpensePage from './pages/admin/AdminExpensePage';
 import WorkerPaymentDetailsPage from './pages/admin/WorkerPaymentDetailsPage';
+import ProjectDetailsPage from './pages/admin/ProjectDetailsPage';
 
 
 
@@ -97,6 +98,8 @@ const AuthenticatedApp = () => {
           <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
           <Route path="/admin/workers" element={<ProtectedRoute><WorkerManagementPage /></ProtectedRoute>} />
           <Route path="/admin/projects" element={<ProtectedRoute><ProjectManagementPage /></ProtectedRoute>} />
+          <Route path="/admin/projects/:projectId/management" element={<ProtectedRoute><ProjectDetailsPage /></ProtectedRoute>} />
+
           <Route path="/admin/approvals" element={<ProtectedRoute><ApprovalsLayout /></ProtectedRoute>}>
             <Route index element={<Navigate to="work-hours" />} />
             <Route path="work-hours" element={<WorkHoursApprovalPage />} />

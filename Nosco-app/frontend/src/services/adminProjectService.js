@@ -2,7 +2,8 @@
 import { firestore } from '../firebase/firebase_config';
 import { 
   collection, 
-  query, 
+  query,
+  getDoc, 
   getDocs, 
   doc, 
   updateDoc, 
@@ -80,37 +81,16 @@ export const adminProjectService = {
   // Get project details including assigned workers
   getProjectDetails: async (projectId) => {
     try {
-      // Get project data
-      const projectDoc = await firestore.collection('projects').doc(projectId).get();
-      if (!projectDoc.exists) {
+      const projectRef = doc(firestore, 'projects', projectId);
+      const projectSnap = await getDoc(projectRef);
+      
+      if (!projectSnap.exists()) {
         throw new Error('Project not found');
       }
 
-      // Get assigned workers
-      const assignmentsRef = collection(firestore, 'projectAssignments');
-      const q = query(assignmentsRef, where('projectId', '==', projectId));
-      const assignmentsSnapshot = await getDocs(q);
-      
-      const assignedWorkers = [];
-      for (const doc of assignmentsSnapshot.docs) {
-        const workerData = await firestore
-          .collection('users')
-          .doc(doc.data().workerId)
-          .get();
-          
-        if (workerData.exists) {
-          assignedWorkers.push({
-            id: workerData.id,
-            ...workerData.data(),
-            assignmentId: doc.id
-          });
-        }
-      }
-
       return {
-        id: projectDoc.id,
-        ...projectDoc.data(),
-        assignedWorkers
+        id: projectSnap.id,
+        ...projectSnap.data()
       };
     } catch (error) {
       console.error('Error fetching project details:', error);
