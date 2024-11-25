@@ -2,6 +2,8 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom'; // Add Link import
 import { useAuth } from '../../context/AuthContext';
+import { nextWednesday } from 'date-fns';
+import WorkerManagementPage from '../../pages/admin/WorkerManagementPage';
 
 const AdminDashboard = ({ metrics }) => {
   const navigate = useNavigate();
@@ -14,9 +16,11 @@ const AdminDashboard = ({ metrics }) => {
     { title: "Work Hours", path: "/admin/approvals/work-hours" },
     { title: "Expenses", path: "/admin/approvals/expenses" },
     { title: "Payments", path: "/admin/payments" },
-    { title: "Reports", path: "/admin/reports" },
-    { title: "Project Invitations", path: "/admin/project-invitations" },
     { title: "Settings", path: "/admin/settings" },
+    { title: "Notifications", path: "/admin/notifications" },
+    { title: "Documents", path: "/admin/documents" },
+    { title: "Audit", path: "/admin/audit" },
+    { title: "Analytics", path: "/admin/analytics" },
   ];
 
   const quickActions = [

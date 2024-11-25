@@ -10,19 +10,27 @@ const AuthenticatedHeader = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/');
   };
 
   const getDashboardPath = () => {
     return user?.role === 'admin' ? '/admin/dashboard' : '/worker/dashboard';
   };
 
+  const getProfilePath = () => {
+    return user?.role === 'admin' ? '/admin/profile' : '/worker/profile';
+  };
+
+  const getSettingsPath = () => {
+    return user?.role === 'admin' ? '/admin/settings' : '/worker/settings';
+  };
+
   if (loading) {
-    return <div>Loading...</div>; // Or any loading indicator you prefer
+    return <div>Loading...</div>;
   }
 
   if (!user) {
-    return null; // Or redirect to login, or show a generic header
+    return null;
   }
 
   return (
@@ -44,7 +52,7 @@ const AuthenticatedHeader = () => {
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
               <button
                 onClick={() => {
-                  navigate('/worker/profile');
+                  navigate(getProfilePath());
                   setIsDropdownOpen(false);
                 }}
                 className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -53,7 +61,7 @@ const AuthenticatedHeader = () => {
               </button>
               <button
                 onClick={() => {
-                  navigate('/worker/settings');
+                  navigate(getSettingsPath());
                   setIsDropdownOpen(false);
                 }}
                 className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"

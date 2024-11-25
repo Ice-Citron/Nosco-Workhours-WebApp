@@ -48,6 +48,12 @@ import AdminExpensePage from './pages/admin/AdminExpensePage';
 import WorkerPaymentDetailsPage from './pages/admin/WorkerPaymentDetailsPage';
 import ProjectDetailsPage from './pages/admin/ProjectDetailsPage';
 
+import AdminNotificationsPage from './pages/admin/AdminNotificationsPage';
+import AdminDocumentsPage from './pages/admin/AdminDocumentsPage';
+import AdminAuditPage from './pages/admin/AdminAuditPage';
+import AdminAnalyticsPage from './pages/admin/AdminAnalyticsPage';
+import AdminProfilePage from './pages/admin/AdminProfilePage';
+
 
 
 const AuthenticatedApp = () => {
@@ -96,6 +102,7 @@ const AuthenticatedApp = () => {
         {/* Admin Routes */}
         <Route path="/admin" element={<ProtectedRoute> <AdminProvider> <AdminLayout /> </AdminProvider> </ProtectedRoute> }>
           <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
+          <Route path="/admin/profile" element={<ProtectedRoute><AdminProfilePage /></ProtectedRoute>} />  {/* Add this line */}
           <Route path="/admin/workers" element={<ProtectedRoute><WorkerManagementPage /></ProtectedRoute>} />
           <Route path="/admin/projects" element={<ProtectedRoute><ProjectManagementPage /></ProtectedRoute>} />
           <Route path="/admin/projects/:projectId/management" element={<ProtectedRoute><ProjectDetailsPage /></ProtectedRoute>} />
@@ -110,6 +117,12 @@ const AuthenticatedApp = () => {
           <Route path="/admin/payments/worker/:workerId" element={<ProtectedRoute><WorkerPaymentDetailsPage /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/admin/project-invitations" element={<ProtectedRoute><AdminProjectInvitationsPage /></ProtectedRoute>} />
+
+          <Route path="/admin/notifications" element={<ProtectedRoute><AdminNotificationsPage /></ProtectedRoute>} />
+          <Route path="/admin/documents" element={<ProtectedRoute><AdminDocumentsPage /></ProtectedRoute>} />
+          <Route path="/admin/audit" element={<ProtectedRoute><AdminAuditPage /></ProtectedRoute>} />
+          <Route path="/admin/analytics" element={<ProtectedRoute><AdminAnalyticsPage /></ProtectedRoute>} />
+
           <Route path="/admin/settings/*" element={<ProtectedRoute><AdminSettingsLayout /></ProtectedRoute>}>
             <Route index element={<Navigate to="expense-types" />} />
             <Route path="expense-types" element={<ExpenseTypeSettingsPage />} />
