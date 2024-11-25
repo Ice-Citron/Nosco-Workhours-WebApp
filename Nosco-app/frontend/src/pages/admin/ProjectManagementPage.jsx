@@ -1,7 +1,9 @@
+// src/pages/admin/ProjectManagementPage.jsx
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import AddProjectForm from '../../components/admin/projects/AddProjectForm';
-import ProjectDetailsModal from '../../components/admin/projects/ProjectDetailsModal';
+import Table from '../../components/common/Table';
+import Tab from './../../components/admin/projects/ProjectsTab'; // Add this import
 import { adminProjectService } from '../../services/adminProjectService';
 import { useNavigate } from 'react-router-dom';
 
@@ -11,8 +13,7 @@ const ProjectManagementPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedProject, setSelectedProject] = useState(null);
+  const [activeTab, setActiveTab] = useState('draft');
 
   useEffect(() => {
     fetchProjects();
@@ -32,23 +33,76 @@ const ProjectManagementPage = () => {
     }
   };
 
-  const handleEndProject = async (projectId) => {
-    try {
-      await adminProjectService.updateProjectStatus(projectId, 'ended');
-      await fetchProjects();
-    } catch (err) {
-      console.error('Error ending project:', err);
+  const getFilteredProjects = () => {
+    return projects.filter(p => p.status === activeTab);
+  };
+
+  const getTabs = () => {
+    const counts = projects.reduce((acc, project) => {
+      acc[project.status] = (acc[project.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    return [
+      { id: 'draft', label: 'Draft', count: counts.draft || 0 },
+      { id: 'active', label: 'Active', count: counts.active || 0 },
+      { id: 'ended', label: 'Ended', count: counts.ended || 0 },
+      { id: 'archived', label: 'Archived', count: counts.archived || 0 }
+    ];
+  };
+
+  const columns = [
+    {
+      header: 'NAME',
+      accessorKey: 'name',
+      cell: ({ row }) => (
+        <div>
+          <div className="font-medium text-nosco-text">{row.original.name}</div>
+          <div className="text-sm text-gray-500">
+            {Object.keys(row.original.workers || {}).length} workers assigned
+          </div>
+        </div>
+      )
+    },
+    {
+      header: 'CUSTOMER',
+      accessorKey: 'customer'
+    },
+    {
+      header: 'COUNTRY',
+      accessorKey: 'location'
+    },
+    {
+      header: 'DATES',
+      cell: ({ row }) => (
+        <div>
+          <div className="text-sm">
+            Start: {format(row.original.startDate.toDate(), 'MMM d, yyyy')}
+          </div>
+          <div className="text-sm">
+            End: {format(row.original.endDate.toDate(), 'MMM d, yyyy')}
+          </div>
+        </div>
+      )
+    },
+    {
+      header: 'STATUS',
+      accessorKey: 'status',
+      cell: ({ getValue }) => (
+        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+          getValue() === 'active' 
+            ? 'bg-green-100 text-green-800'
+            : getValue() === 'draft'
+            ? 'bg-yellow-100 text-yellow-800'
+            : getValue() === 'archived'
+            ? 'bg-gray-100 text-gray-800'
+            : 'bg-red-100 text-red-800'
+        }`}>
+          {getValue()}
+        </span>
+      )
     }
-  };
-
-  const handleViewDetails = (project) => {
-    setSelectedProject(project);
-    setShowDetailsModal(true);
-  };
-
-  const handleManage = (projectId) => {
-    navigate(`/admin/projects/${projectId}/management`);
-  };
+  ];
 
   if (loading) {
     return (
@@ -70,68 +124,21 @@ const ProjectManagementPage = () => {
         </button>
       </div>
 
+      <div className="mb-6">
+        <Tab
+          tabs={getTabs()}
+          activeTab={activeTab}
+          onChange={setActiveTab}
+        />
+      </div>
+
       <div className="bg-white rounded-lg shadow-sm">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b">
-              <th className="text-left p-4 text-nosco-text font-medium">NAME</th>
-              <th className="text-left p-4 text-nosco-text font-medium">CUSTOMER</th>
-              <th className="text-left p-4 text-nosco-text font-medium">COUNTRY</th>
-              <th className="text-left p-4 text-nosco-text font-medium">DATES</th>
-              <th className="text-left p-4 text-nosco-text font-medium">STATUS</th>
-              <th className="text-left p-4 text-nosco-text font-medium">ACTIONS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {projects.map((project) => (
-              <tr key={project.id} className="border-b">
-                <td className="p-4">
-                  <div className="font-medium text-nosco-text">{project.name}</div>
-                  <div className="text-sm text-gray-500">
-                    {project.assignedWorkers?.length || 0} workers assigned
-                  </div>
-                </td>
-                <td className="p-4 text-nosco-text">{project.customer}</td>
-                <td className="p-4 text-nosco-text">{project.country}</td>
-                <td className="p-4 text-nosco-text">
-                  <div className="text-sm">
-                    Start: {format(project.startDate.toDate(), 'MMM d, yyyy')}
-                  </div>
-                  <div className="text-sm">
-                    End: {format(project.endDate.toDate(), 'MMM d, yyyy')}
-                  </div>
-                </td>
-                <td className="p-4">
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    project.status === 'active' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {project.status}
-                  </span>
-                </td>
-                <td className="p-4">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleManage(project.id)}
-                      className="px-4 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors duration-200"
-                    >
-                      Manage
-                    </button>
-                    {project.status === 'active' && (
-                      <button
-                        onClick={() => handleEndProject(project.id)}
-                        className="px-4 py-1 rounded bg-red-50 text-nosco-red hover:bg-red-100 transition-colors duration-200"
-                      >
-                        End Project
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Table
+          data={getFilteredProjects()}
+          columns={columns}
+          onRowClick={(row) => navigate(`/admin/projects/${row.id}/management`)}
+          emptyMessage={`No ${activeTab} projects found`}
+        />
       </div>
 
       {showAddModal && (
@@ -139,18 +146,6 @@ const ProjectManagementPage = () => {
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           onProjectAdded={fetchProjects}
-        />
-      )}
-
-      {showDetailsModal && selectedProject && (
-        <ProjectDetailsModal
-          isOpen={showDetailsModal}
-          onClose={() => {
-            setShowDetailsModal(false);
-            setSelectedProject(null);
-          }}
-          project={selectedProject}
-          onProjectUpdated={fetchProjects}
         />
       )}
     </div>

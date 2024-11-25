@@ -9,7 +9,8 @@ import {
   updateDoc, 
   addDoc, 
   Timestamp,
-  where
+  where,
+  deleteDoc,
 } from 'firebase/firestore';
 
 export const adminProjectService = {
@@ -141,5 +142,76 @@ export const adminProjectService = {
       console.error('Error removing worker from project:', error);
       throw error;
     }
-  }
+  },
+
+  // Add to adminProjectService.js
+  endProject: async (projectId) => {
+    try {
+      const projectRef = doc(firestore, 'projects', projectId);
+      await updateDoc(projectRef, {
+        status: 'ended',
+        endedAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      });
+    } catch (error) {
+      console.error('Error ending project:', error);
+      throw error;
+    }
+  },
+
+  unarchiveProject: async (projectId) => {
+    try {
+      const projectRef = doc(firestore, 'projects', projectId);
+      const projectDoc = await getDoc(projectRef);
+      if (!projectDoc.exists()) {
+        throw new Error('Project not found');
+      }
+  
+      // Get the previous status before it was archived (or default to 'ended')
+      const previousStatus = projectDoc.data().previousStatus || 'ended';
+  
+      await updateDoc(projectRef, {
+        status: previousStatus,
+        unarchiveDate: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      });
+    } catch (error) {
+      console.error('Error unarchiving project:', error);
+      throw error;
+    }
+  },
+  
+  // Modify the archiveProject function to store the previous status
+  archiveProject: async (projectId) => {
+    try {
+      const projectRef = doc(firestore, 'projects', projectId);
+      const projectDoc = await getDoc(projectRef);
+      if (!projectDoc.exists()) {
+        throw new Error('Project not found');
+      }
+  
+      // Store the current status before archiving
+      const currentStatus = projectDoc.data().status;
+  
+      await updateDoc(projectRef, {
+        status: 'archived',
+        previousStatus: currentStatus,
+        archivedAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      });
+    } catch (error) {
+      console.error('Error archiving project:', error);
+      throw error;
+    }
+  },
+
+  deleteProject: async (projectId) => {
+    try {
+      const projectRef = doc(firestore, 'projects', projectId);
+      await deleteDoc(projectRef);
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      throw error;
+    }
+  },
 };
