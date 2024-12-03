@@ -9,3 +9,4 @@ export const getRewardPoints = async (actionType) => {
     
     return DEFAULT_POINTS[actionType] || 0;
   };
+  
