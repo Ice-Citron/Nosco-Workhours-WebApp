@@ -55,7 +55,6 @@ import AdminAnalyticsPage from './pages/admin/AdminAnalyticsPage';
 import AdminProfilePage from './pages/admin/AdminProfilePage';
 
 
-
 const AuthenticatedApp = () => {
   const { loading } = useAuth();
 

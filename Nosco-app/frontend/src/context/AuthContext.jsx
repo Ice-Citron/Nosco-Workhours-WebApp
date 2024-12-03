@@ -8,6 +8,7 @@ import {
 import { doc, getDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
+
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
