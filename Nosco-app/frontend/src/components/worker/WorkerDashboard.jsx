@@ -50,7 +50,6 @@ const WorkerDashboard = () => {
     { title: "Expenses", path: "/worker/expenses" },
     { title: "Payments", path: "/worker/payments" },
     { title: "Notifications", path: "/worker/notifications" },
-    { title: "Rewards", path: "/worker/rewards" },
     { title: "Feedback", path: "/worker/feedback" },
     { title: "Project Invitations", path: "/worker/project-invitations" },
   ];

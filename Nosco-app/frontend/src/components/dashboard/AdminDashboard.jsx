@@ -16,11 +16,9 @@ const AdminDashboard = ({ metrics }) => {
     { title: "Work Hours", path: "/admin/approvals/work-hours" },
     { title: "Expenses", path: "/admin/approvals/expenses" },
     { title: "Payments", path: "/admin/payments" },
-    { title: "Settings", path: "/admin/settings" },
-    { title: "Notifications", path: "/admin/notifications" },
-    { title: "Documents", path: "/admin/documents" },
-    { title: "Audit", path: "/admin/audit" },
     { title: "Analytics", path: "/admin/analytics" },
+    { title: "Notifications", path: "/admin/notifications" },
+    { title: "Settings", path: "/admin/settings" },
   ];
 
   const quickActions = [
