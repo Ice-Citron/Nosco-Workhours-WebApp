@@ -38,7 +38,7 @@ import AdminProjectInvitationsPage from './pages/admin/AdminProjectInvitationsPa
 import WorkHoursApprovalPage from './pages/admin/WorkHoursApprovalPage';
 
 import ApprovalsLayout from './components/admin/approvals/ApprovalsLayout';
-import AdminSettingsPage from './pages/admin/settings/AdminSettingsPage';
+import AdminSettingsPage from './pages/admin/AdminSettingsPage';
 
 import AdminProvider from './context/AdminContext';
 import AdminExpensePage from './pages/admin/AdminExpensePage';

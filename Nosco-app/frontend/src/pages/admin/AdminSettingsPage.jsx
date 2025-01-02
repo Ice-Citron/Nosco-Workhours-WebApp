@@ -1,13 +1,13 @@
 // src/pages/admin/settings/AdminSettingsPage.jsx
 import React, { useState, useEffect } from 'react';
-import Modal from '../../../components/common/Modal';
+import Modal from '../../components/common/Modal';
 import {
   getAdminPreferences,
   updateAdminPreferences,
   getExchangeRatesSettings,
   updateExchangeRatesSettings,
   forceRefreshRates
-} from '../../../services/adminSettingsService';
+} from '../../services/adminSettingsService';
 
 const API_KEY = 'd8ec97094877d57688a1391b'; // Just as reference, you might not need it here
 
