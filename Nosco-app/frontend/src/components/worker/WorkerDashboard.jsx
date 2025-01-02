@@ -46,7 +46,6 @@ const WorkerDashboard = () => {
   ];
 
   const navLinks = [
-    { title: "Home", path: "/worker/dashboard" },
     { title: "Work Hours", path: "/worker/work-hours" },
     { title: "Expenses", path: "/worker/expenses" },
     { title: "Payments", path: "/worker/payments" },

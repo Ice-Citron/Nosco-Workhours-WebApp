@@ -39,9 +39,7 @@ import WorkHoursApprovalPage from './pages/admin/WorkHoursApprovalPage';
 
 import ApprovalsLayout from './components/admin/approvals/ApprovalsLayout';
 import AdminSettingsLayout from './components/admin/settings/AdminSettingsLayout';
-import ExpenseTypeSettingsPage from './pages/admin/settings/ExpenseTypeSettingsPage';
-import CompanySettingsPage from './pages/admin/settings/CompanySettingsPage';
-import ExchangeRatesPage from './pages/admin/settings/ExchangeRatesPage';
+import AdminSettingsPage from './pages/admin/settings/AdminSettingsPage';
 
 import AdminProvider from './context/AdminContext';
 import AdminExpensePage from './pages/admin/AdminExpensePage';
@@ -122,12 +120,7 @@ const AuthenticatedApp = () => {
           <Route path="/admin/audit" element={<ProtectedRoute><AdminAuditPage /></ProtectedRoute>} />
           <Route path="/admin/analytics" element={<ProtectedRoute><AdminAnalyticsPage /></ProtectedRoute>} />
 
-          <Route path="/admin/settings/*" element={<ProtectedRoute><AdminSettingsLayout /></ProtectedRoute>}>
-            <Route index element={<Navigate to="expense-types" />} />
-            <Route path="expense-types" element={<ExpenseTypeSettingsPage />} />
-            <Route path="company" element={<CompanySettingsPage />} />
-            <Route path="exchange-rates" element={<ExchangeRatesPage />} />
-          </Route>
+          <Route path="/admin/settings" element={<ProtectedRoute><AdminSettingsPage /></ProtectedRoute>}/>
         </Route>
 
         <Route path="*" element={<ErrorPage />} />
