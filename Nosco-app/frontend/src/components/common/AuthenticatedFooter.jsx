@@ -12,7 +12,7 @@ const AuthenticatedFooter = () => {
   return (
     <footer className="bg-nosco-red text-white py-4">
       <div className="container mx-auto px-4 flex justify-between items-center">
-        <p>© 2024 Nosco. All rights reserved.</p>
+        <p>© 2025 Nosco. All rights reserved.</p>
         <nav>
           <ul className="flex space-x-4">
             <li>

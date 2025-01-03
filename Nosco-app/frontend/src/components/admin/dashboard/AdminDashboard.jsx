@@ -1,9 +1,9 @@
 // src/components/dashboard/AdminDashboard.jsx
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom'; // Add Link import
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../../context/AuthContext';
 import { nextWednesday } from 'date-fns';
-import WorkerManagementPage from '../../pages/admin/WorkerManagementPage';
+import WorkerManagementPage from '../../../pages/admin/WorkerManagementPage';
 
 const AdminDashboard = ({ metrics }) => {
   const navigate = useNavigate();
@@ -17,6 +17,7 @@ const AdminDashboard = ({ metrics }) => {
     { title: "Expenses", path: "/admin/approvals/expenses" },
     { title: "Payments", path: "/admin/payments" },
     { title: "Analytics", path: "/admin/analytics" },
+    { title: "Reports", path: "/admin/reports" },
     { title: "Notifications", path: "/admin/notifications" },
     { title: "Settings", path: "/admin/settings" },
   ];

@@ -12,7 +12,7 @@ import ContactSupportPage from './pages/ContactSupportPage';
 import WorkerDashboardPage from './pages/WorkerDashboardPage';
 import SubmitExpensePage from './pages/SubmitExpensePage';
 import LogHoursPage from './pages/LogHoursPage';
-import ReportsPage from './pages/ReportsPage';
+import ReportsPage from './pages/admin/AdminReportsPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
 import ErrorPage from './pages/ErrorPage';
@@ -115,10 +115,8 @@ const AuthenticatedApp = () => {
           <Route path="/admin/project-invitations" element={<ProtectedRoute><AdminProjectInvitationsPage /></ProtectedRoute>} />
 
           <Route path="/admin/notifications" element={<ProtectedRoute><AdminNotificationsPage /></ProtectedRoute>} />
-          <Route path="/admin/documents" element={<ProtectedRoute><AdminDocumentsPage /></ProtectedRoute>} />
-          <Route path="/admin/audit" element={<ProtectedRoute><AdminAuditPage /></ProtectedRoute>} />
           <Route path="/admin/analytics" element={<ProtectedRoute><AdminAnalyticsPage /></ProtectedRoute>} />
-
+          <Route path="/admin/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute><AdminSettingsPage /></ProtectedRoute>}/>
         </Route>
 
