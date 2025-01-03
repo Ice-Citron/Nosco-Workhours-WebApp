@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import ExpensesFilterBar from './ExpensesFilterBar';
 import { saveAs } from 'file-saver';
-import { getExpensesForReport } from '../../../services/adminReportService'; // aggregator
+import { getExpensesForCsv } from '../../../services/adminReportService';
+
 // or your aggregator that returns flattened objects
 
 function flattenForCSV(val) {
@@ -18,7 +19,7 @@ const ExpensesReportSection = () => {
   const handleApplyFilters = async (filters) => {
     setLoading(true);
     try {
-      const data = await getExpensesForReport(filters);
+      const data = await getExpensesForCsv(filters);
       setReportData(data);
     } catch (err) {
       console.error('Error loading expenses report:', err);

@@ -11,16 +11,14 @@ import { collection, getDocs } from 'firebase/firestore';
 function toDateObj(dateValue) {
   if (!dateValue) return null;
 
-  // If Firestore Timestamp => .toDate()
+  // Firestore Timestamp => .toDate()
   if (typeof dateValue.toDate === 'function') {
     return dateValue.toDate();
   }
 
-  // If { seconds, nanoseconds }
+  // { seconds, nanoseconds }
   if (typeof dateValue === 'object' && dateValue.seconds !== undefined) {
-    return new Date(
-      dateValue.seconds * 1000 + Math.floor(dateValue.nanoseconds / 1000000)
-    );
+    return new Date(dateValue.seconds * 1000 + Math.floor(dateValue.nanoseconds / 1000000));
   }
 
   // If it's a string
@@ -32,99 +30,23 @@ function toDateObj(dateValue) {
 }
 
 /* ----------------------------------------------------------------
-   1) For SINGLE worker, MULTI projects, date range 
-   => getWorkerHoursByProjectReport
-   ----------------------------------------------------------------*/
+   1) getWorkerHoursByProjectReport
+   SINGLE worker, MULTI projects, date range
+   Columns:
+     "Worker Name", "Date", "Location", "Project Name",
+     "Regular Hours", "Overtime 1.5", "Overtime 2.0", 
+     "Status", "Approved By", "Remarks"
+   Sort:
+     Worker Name -> Date -> Location -> Project Name
+----------------------------------------------------------------*/
+export async function getWorkerHoursByProjectReport(filters) {
+  // 1) fetch from adminWorkHoursService
+  const rawDocs = await adminWorkHoursService.getWorkHours('all', {});
 
-   export async function getWorkerHoursByProjectReport(filters) {
-    // 1) fetch everything from adminWorkHoursService
-    //    Possibly pass 'all' or 'approved'. We do 'all' here:
-    const rawDocs = await adminWorkHoursService.getWorkHours('all', {});
-      // rawDocs likely has shape: [{ id, date, userID, projectID, status, ... }, ...]
-  
-    // 2) in-memory filtering
-    let results = [...rawDocs];
-  
-    // A) date range
-    if (filters.dateRange?.start || filters.dateRange?.end) {
-      const startMs = filters.dateRange.start
-        ? new Date(filters.dateRange.start).getTime()
-        : 0;
-      const endMs = filters.dateRange.end
-        ? new Date(filters.dateRange.end).getTime()
-        : Number.MAX_SAFE_INTEGER;
-  
-      results = results.filter((item) => {
-        const d = toDateObj(item.date);
-        if (!d) return false;
-        const t = d.getTime();
-        return t >= startMs && t <= endMs;
-      });
-    }
-  
-    // B) single worker
-    if (filters.workerID) {
-      results = results.filter((item) => item.userID === filters.workerID);
-    }
-  
-    // C) multi projects
-    if (filters.projectIDs?.length) {
-      results = results.filter((item) =>
-        item.projectID && filters.projectIDs.includes(item.projectID)
-      );
-    }
-  
-    // D) build projectMap => { projectID -> projectName }
-    let projectMap = {};
-    if (filters.projectIDs?.length > 0) {
-      const snap = await getDocs(collection(db, 'projects'));
-      snap.forEach((pDoc) => {
-        const pData = pDoc.data();
-        projectMap[pDoc.id] = pData.name || pDoc.id;
-      });
-    }
-  
-    // E) flatten or transform for CSV
-    const final = results.map((item) => {
-      const dateObj = toDateObj(item.date);
-      const dateStr = dateObj ? dateObj.toISOString().slice(0, 10) : '';
-      const projName = projectMap[item.projectID] || item.projectID || '';
-  
-      return {
-        projectName: projName,
-        projectID: item.projectID || '',
-        date: dateStr,
-        status: item.status || '',
-        regularHours: item.regularHours || 0,
-        overtime15x: item.overtime15x || 0,
-        overtime20x: item.overtime20x || 0,
-        remarks: item.remarks || '',
-      };
-    });
-  
-    // F) sort by projectName, then date
-    final.sort((a, b) => {
-      if (a.projectName !== b.projectName) {
-        return a.projectName.localeCompare(b.projectName);
-      }
-      return a.date.localeCompare(b.date);
-    });
-  
-    return final;
-  }
-  
-
-/* ----------------------------------------------------------------
-   2) Work Hours (multi worker, multi project, date range)
-   => getWorkHoursForReport
-   ----------------------------------------------------------------*/
-
-export async function getWorkHoursForReport(filters) {
-  // fetch e.g. 'approved' from adminWorkHoursService
-  const rawDocs = await adminWorkHoursService.getWorkHours('approved', {});
+  // 2) In-memory filter
   let results = [...rawDocs];
 
-  // date range
+  // (A) date range
   if (filters.dateRange?.start || filters.dateRange?.end) {
     const startMs = filters.dateRange.start
       ? new Date(filters.dateRange.start).getTime()
@@ -133,41 +55,114 @@ export async function getWorkHoursForReport(filters) {
       ? new Date(filters.dateRange.end).getTime()
       : Number.MAX_SAFE_INTEGER;
 
-    results = results.filter((doc) => {
-      const d = toDateObj(doc.date);
+    results = results.filter((item) => {
+      const d = toDateObj(item.date);
       if (!d) return false;
       const t = d.getTime();
       return t >= startMs && t <= endMs;
     });
   }
 
-  // projectIDs
-  if (filters.projectIDs?.length) {
+  // (B) single worker
+  if (filters.workerID) {
+    results = results.filter((item) => item.userID === filters.workerID);
+  }
+
+  // (C) multi projects
+  if (filters.projectIDs?.length > 0) {
     results = results.filter(
-      (doc) => doc.projectID && filters.projectIDs.includes(doc.projectID)
+      (item) => item.projectID && filters.projectIDs.includes(item.projectID)
     );
   }
 
-  // workerIDs
-  if (filters.workerIDs?.length) {
-    results = results.filter(
-      (doc) => doc.userID && filters.workerIDs.includes(doc.userID)
-    );
+  // 3) Build projectMap => { projectID: { name, location } }
+  const projectMap = {};
+  {
+    const snap = await getDocs(collection(db, 'projects'));
+    snap.forEach((pDoc) => {
+      const pData = pDoc.data();
+      projectMap[pDoc.id] = {
+        name: pData.name || pDoc.id,
+        location: pData.location || '',
+      };
+    });
   }
 
-  return results;
+  // 4) Build userMap => { userID -> userName }
+  const userIDs = new Set();
+  results.forEach((item) => {
+    if (item.userID) userIDs.add(item.userID);
+    if (item.approvedBy) userIDs.add(item.approvedBy);
+  });
+
+  const userMap = {};
+  if (userIDs.size > 0) {
+    const userSnap = await getDocs(collection(db, 'users'));
+    userSnap.forEach((uDoc) => {
+      const uData = uDoc.data();
+      userMap[uDoc.id] = uData.name || uDoc.id;
+    });
+  }
+
+  // 5) Transform => new columns
+  const final = results.map((item) => {
+    const dateObj = toDateObj(item.date);
+    const dateStr = dateObj ? dateObj.toISOString().slice(0, 10) : '';
+    const workerName = userMap[item.userID] || '';
+    const approvedName = item.approvedBy ? (userMap[item.approvedBy] || '') : '';
+
+    const projInfo = projectMap[item.projectID] || { name: '', location: '' };
+    const locationStr = projInfo.location;
+    const projectNameStr = projInfo.name;
+
+    return {
+      'Worker Name': workerName,
+      'Date': dateStr,
+      'Location': locationStr,
+      'Project Name': projectNameStr,
+      'Regular Hours': item.regularHours || 0,
+      'Overtime 1.5': item.overtime15x || 0,
+      'Overtime 2.0': item.overtime20x || 0,
+      'Status': item.status || '',
+      'Approved By': approvedName,
+      'Remarks': item.remarks || '',
+    };
+  });
+
+  // 6) Sort => Worker Name -> Date -> Location -> Project Name
+  final.sort((a, b) => {
+    // Worker Name
+    if (a['Worker Name'] !== b['Worker Name']) {
+      return a['Worker Name'].localeCompare(b['Worker Name']);
+    }
+    // Date
+    if (a['Date'] !== b['Date']) {
+      return a['Date'].localeCompare(b['Date']);
+    }
+    // Location
+    if (a['Location'] !== b['Location']) {
+      return a['Location'].localeCompare(b['Location']);
+    }
+    // Project Name
+    return a['Project Name'].localeCompare(b['Project Name']);
+  });
+
+  return final;
 }
 
 /* ----------------------------------------------------------------
-   3) Expenses => getExpensesForReport
-   => multi projectIDs, multi workerIDs, expenseTypes, date range
-   ----------------------------------------------------------------*/
+   2) getExpensesForCsv
+   columns:
+     Location, Project Name, Date, Expense Type, Amount,
+     Worker Name, Approved Status, Approved By, Description
+   sort => location -> project name -> date -> expense type -> amount
+----------------------------------------------------------------*/
+export async function getExpensesForCsv(filters) {
+  // 1) fetch all expense docs
+  const rawDocs = await adminExpenseService.getAllExpenses();
+  let results = [...rawDocs];
 
-export async function getExpensesForReport(filters) {
-  // 1) fetch all from adminExpenseService
-  const allExpenses = await adminExpenseService.getAllExpenses();
-  let results = [...allExpenses];
-
+  // 2) in-memory filter
   // date range
   if (filters.dateRange?.start || filters.dateRange?.end) {
     const startMs = filters.dateRange.start
@@ -206,37 +201,282 @@ export async function getExpensesForReport(filters) {
     );
   }
 
-  return results;
+  // 3) Build projectMap => get location + name?
+  const projectMap = {};
+  {
+    const projSnap = await getDocs(collection(db, 'projects'));
+    projSnap.forEach((pDoc) => {
+      const pData = pDoc.data();
+      projectMap[pDoc.id] = {
+        name: pData.name || pDoc.id,
+        location: pData.location || '',
+      };
+    });
+  }
+
+  // 4) userMap => for worker name & approvedBy name
+  const userIDs = new Set();
+  results.forEach((exp) => {
+    if (exp.userID) userIDs.add(exp.userID);
+    if (exp.approvedBy) userIDs.add(exp.approvedBy);
+  });
+  const userMap = {};
+  if (userIDs.size > 0) {
+    const userSnap = await getDocs(collection(db, 'users'));
+    userSnap.forEach((uDoc) => {
+      const uData = uDoc.data();
+      userMap[uDoc.id] = uData.name || uDoc.id;
+    });
+  }
+
+  // 5) Transform => location, project name, date, expense type, amount, ...
+  const final = results.map((exp) => {
+    const dateObj = toDateObj(exp.date);
+    const dateStr = dateObj ? dateObj.toISOString().slice(0, 10) : '';
+
+    const projInfo = projectMap[exp.projectID] || { name: '', location: '' };
+    const locationStr = projInfo.location;
+    const projectName = projInfo.name;
+
+    const workerName = exp.userID ? (userMap[exp.userID] || '') : '';
+    const approvedName = exp.approvedBy ? (userMap[exp.approvedBy] || '') : '';
+
+    return {
+      Location: locationStr,
+      'Project Name': projectName,
+      Date: dateStr,
+      'Expense Type': exp.expenseType || '',
+      Amount: exp.amount || 0,
+      'Worker Name': workerName,
+      'Approved Status': exp.status || '',
+      'Approved By': approvedName,
+      Description: exp.description || '',
+    };
+  });
+
+  // 6) Sort => location -> project name -> date -> expense type -> amount
+  final.sort((a, b) => {
+    // location
+    if (a.Location !== b.Location) {
+      return a.Location.localeCompare(b.Location);
+    }
+    // project
+    if (a['Project Name'] !== b['Project Name']) {
+      return a['Project Name'].localeCompare(b['Project Name']);
+    }
+    // date
+    if (a.Date !== b.Date) {
+      return a.Date.localeCompare(b.Date);
+    }
+    // expense type
+    if (a['Expense Type'] !== b['Expense Type']) {
+      return a['Expense Type'].localeCompare(b['Expense Type']);
+    }
+    // amount
+    return a.Amount - b.Amount;
+  });
+
+  return final;
 }
 
 /* ----------------------------------------------------------------
-   4) Projects => getProjectsForReport
-   => if you want to do date range (start/end) or status, location, etc.
-   ----------------------------------------------------------------*/
+   3) getProjectWorkerHoursCsv
+   columns:
+     Location, Project Name, Date, Worker Name,
+     Regular Hours, Overtime 1.5, Overtime 2.0,
+     Status, Approved By, Remarks
+   sorted => location -> project name -> date -> worker name
+----------------------------------------------------------------*/
+export async function getProjectWorkerHoursCsv(filters) {
+  // 1) filter the projects by statuses, location, etc.
+  const projSnap = await getDocs(collection(db, 'projects'));
+  let projectsArr = [];
+  projSnap.forEach((pDoc) => {
+    const pData = pDoc.data();
+    projectsArr.push({ id: pDoc.id, ...pData });
+  });
 
-export async function getProjectsForReport(filters) {
-  // fetch all projects
-  const snap = await getDocs(collection(db, 'projects'));
-  let results = snap.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  // Filter by statuses
+  if (filters.statuses?.length) {
+    projectsArr = projectsArr.filter((p) => p.status && filters.statuses.includes(p.status));
+  }
+  // Filter by locations
+  if (filters.locations?.length) {
+    projectsArr = projectsArr.filter(
+      (p) => p.location && filters.locations.includes(p.location)
+    );
+  }
+  // date range if needed for project-level date
 
-  // filter by status
-  if (filters.status) {
-    results = results.filter((proj) => proj.status === filters.status);
+  // 2) fetch all hours
+  const allHours = await adminWorkHoursService.getWorkHours('all', {});
+
+  // build user set
+  const userIDs = new Set();
+  allHours.forEach((wh) => {
+    if (wh.userID) userIDs.add(wh.userID);
+    if (wh.approvedBy) userIDs.add(wh.approvedBy);
+  });
+
+  // userMap
+  const userMap = {};
+  if (userIDs.size > 0) {
+    const userSnap = await getDocs(collection(db, 'users'));
+    userSnap.forEach((uDoc) => {
+      const uData = uDoc.data();
+      userMap[uDoc.id] = uData.name || uDoc.id;
+    });
   }
 
-  // filter by location
-  if (filters.location) {
-    results = results.filter((proj) => proj.location === filters.location);
+  // 3) build final
+  const final = [];
+
+  for (const proj of projectsArr) {
+    const locationStr = proj.location || '';
+    const projectNameStr = proj.name || proj.id;
+
+    // filter hours with projectID=proj.id
+    const matchingHours = allHours.filter((wh) => wh.projectID === proj.id);
+
+    // optional: further filter by date range from the hours doc if needed
+
+    // transform each hour
+    for (const wh of matchingHours) {
+      const dateObj = toDateObj(wh.date);
+      const dateStr = dateObj ? dateObj.toISOString().slice(0, 10) : '';
+      const workerName = wh.userID ? (userMap[wh.userID] || '') : '';
+      const approvedName = wh.approvedBy ? (userMap[wh.approvedBy] || '') : '';
+
+      final.push({
+        Location: locationStr,
+        'Project Name': projectNameStr,
+        Date: dateStr,
+        'Worker Name': workerName,
+        'Regular Hours': wh.regularHours || 0,
+        'Overtime 1.5': wh.overtime15x || 0,
+        'Overtime 2.0': wh.overtime20x || 0,
+        Status: wh.status || '',
+        'Approved By': approvedName,
+        Remarks: wh.remarks || '',
+      });
+    }
   }
 
-  // date range if you store createdAt, etc.
-  if (filters.dateRange?.start || filters.dateRange?.end) {
-    // e.g., if proj has proj.createdAt
-    // parse it => compare to startMs/endMs
+  // 4) sort => location -> project name -> date -> worker name
+  final.sort((a, b) => {
+    if (a.Location !== b.Location) {
+      return a.Location.localeCompare(b.Location);
+    }
+    if (a['Project Name'] !== b['Project Name']) {
+      return a['Project Name'].localeCompare(b['Project Name']);
+    }
+    if (a.Date !== b.Date) {
+      return a.Date.localeCompare(b.Date);
+    }
+    return a['Worker Name'].localeCompare(b['Worker Name']);
+  });
+
+  return final;
+}
+
+/* ----------------------------------------------------------------
+   4) getProjectExpensesCsv
+   columns:
+     Location, Project Name, Date, Expense Type, Amount,
+     Worker Name, Status, Approved By, Description
+   sort => location -> project name -> date -> expense type -> amount
+----------------------------------------------------------------*/
+export async function getProjectExpensesCsv(filters) {
+  // 1) filter projects
+  const projSnap = await getDocs(collection(db, 'projects'));
+  let projectsArr = [];
+  projSnap.forEach((pDoc) => {
+    const pData = pDoc.data();
+    projectsArr.push({ id: pDoc.id, ...pData });
+  });
+
+  if (filters.statuses?.length) {
+    projectsArr = projectsArr.filter((p) => p.status && filters.statuses.includes(p.status));
+  }
+  if (filters.locations?.length) {
+    projectsArr = projectsArr.filter((p) => p.location && filters.locations.includes(p.location));
+  }
+  // date range if you want to filter project-level date
+
+  // 2) fetch all expenses
+  const allExpenses = await adminExpenseService.getAllExpenses();
+
+  // build user set
+  const userIDs = new Set();
+  allExpenses.forEach((exp) => {
+    if (exp.userID) userIDs.add(exp.userID);
+    if (exp.approvedBy) userIDs.add(exp.approvedBy);
+  });
+  const userMap = {};
+  if (userIDs.size > 0) {
+    const userSnap = await getDocs(collection(db, 'users'));
+    userSnap.forEach((uDoc) => {
+      const uData = uDoc.data();
+      userMap[uDoc.id] = uData.name || uDoc.id;
+    });
   }
 
-  return results;
+  // 3) build final
+  const final = [];
+  for (const proj of projectsArr) {
+    const locationStr = proj.location || '';
+    const projectNameStr = proj.name || proj.id;
+
+    // filter expenses with projectID = proj.id
+    const matchingExpenses = allExpenses.filter(
+      (exp) => exp.projectID === proj.id
+    );
+
+    // optionally filter by date range inside each expense doc
+
+    // transform each expense
+    for (const exp of matchingExpenses) {
+      const dateObj = toDateObj(exp.date);
+      const dateStr = dateObj ? dateObj.toISOString().slice(0, 10) : '';
+
+      const workerName = exp.userID ? (userMap[exp.userID] || '') : '';
+      const approvedName = exp.approvedBy ? (userMap[exp.approvedBy] || '') : '';
+
+      final.push({
+        Location: locationStr,
+        'Project Name': projectNameStr,
+        Date: dateStr,
+        'Expense Type': exp.expenseType || '',
+        Amount: exp.amount || 0,
+        'Worker Name': workerName,
+        Status: exp.status || '',
+        'Approved By': approvedName,
+        Description: exp.description || '',
+      });
+    }
+  }
+
+  // 4) sort => location -> project name -> date -> expense type -> amount
+  final.sort((a, b) => {
+    // location
+    if (a.Location !== b.Location) {
+      return a.Location.localeCompare(b.Location);
+    }
+    // project
+    if (a['Project Name'] !== b['Project Name']) {
+      return a['Project Name'].localeCompare(b['Project Name']);
+    }
+    // date
+    if (a.Date !== b.Date) {
+      return a.Date.localeCompare(b.Date);
+    }
+    // expense type
+    if (a['Expense Type'] !== b['Expense Type']) {
+      return a['Expense Type'].localeCompare(b['Expense Type']);
+    }
+    // amount
+    return a.Amount - b.Amount;
+  });
+
+  return final;
 }
