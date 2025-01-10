@@ -1,61 +1,56 @@
 // src/pages/admin/AdminReportsPage.jsx
 import React, { useState } from 'react';
-
-// Each "section" is a separate component
+import Tab from '../../components/common/Tab'; // same Tab component used in AdminExpensePage
 import WorkHoursReportSection from '../../components/admin/reports/WorkHoursReportSection';
 import ExpensesReportSection from '../../components/admin/reports/ExpensesReportSection';
 import ProjectsReportSection from '../../components/admin/reports/ProjectsReportSection';
 
-function AdminReportsPage() {
-  const [reportType, setReportType] = useState('workHours');
+const AdminReportsPage = () => {
+  const [activeTab, setActiveTab] = useState('workHours');
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'workHours':
+        return <WorkHoursReportSection />;
+      case 'expenses':
+        return <ExpensesReportSection />;
+      case 'projects':
+        return <ProjectsReportSection />;
+      default:
+        return null;
+    }
+  };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Reports</h1>
-
-      <div className="mb-4 flex gap-4 items-center">
-        <span className="font-semibold text-gray-700">Report Type:</span>
-
-        <label className="flex items-center gap-1">
-          <input
-            type="radio"
-            name="reportType"
-            value="workHours"
-            checked={reportType === 'workHours'}
-            onChange={(e) => setReportType(e.target.value)}
-          />
-          <span>Work Hours</span>
-        </label>
-
-        <label className="flex items-center gap-1">
-          <input
-            type="radio"
-            name="reportType"
-            value="expenses"
-            checked={reportType === 'expenses'}
-            onChange={(e) => setReportType(e.target.value)}
-          />
-          <span>Expenses</span>
-        </label>
-
-        <label className="flex items-center gap-1">
-          <input
-            type="radio"
-            name="reportType"
-            value="projects"
-            checked={reportType === 'projects'}
-            onChange={(e) => setReportType(e.target.value)}
-          />
-          <span>Projects</span>
-        </label>
+    <div className="space-y-6">
+      {/* Tab Bar */}
+      <div className="border-b border-gray-200">
+        <nav className="flex gap-4" aria-label="Tabs">
+          <Tab
+            isActive={activeTab === 'workHours'}
+            onClick={() => setActiveTab('workHours')}
+          >
+            Report - Work Hours
+          </Tab>
+          <Tab
+            isActive={activeTab === 'expenses'}
+            onClick={() => setActiveTab('expenses')}
+          >
+            Report - Expenses
+          </Tab>
+          <Tab
+            isActive={activeTab === 'projects'}
+            onClick={() => setActiveTab('projects')}
+          >
+            Report - Projects
+          </Tab>
+        </nav>
       </div>
 
-      {/* Render the relevant sub-section */}
-      {reportType === 'workHours' && <WorkHoursReportSection />}
-      {reportType === 'expenses' && <ExpensesReportSection />}
-      {reportType === 'projects' && <ProjectsReportSection />}
+      {/* Tab Content */}
+      {renderTabContent()}
     </div>
   );
-}
+};
 
 export default AdminReportsPage;

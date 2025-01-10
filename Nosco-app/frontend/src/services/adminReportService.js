@@ -306,6 +306,11 @@ export async function getProjectWorkerHoursCsv(filters) {
       (p) => p.location && filters.locations.includes(p.location)
     );
   }
+  if (filters.projectIDs?.length) {
+    projectsArr = projectsArr.filter(
+      (proj) => filters.projectIDs.includes(proj.id)
+    );
+  }
   // date range if needed for project-level date
 
   // 2) fetch all hours
@@ -400,6 +405,11 @@ export async function getProjectExpensesCsv(filters) {
   }
   if (filters.locations?.length) {
     projectsArr = projectsArr.filter((p) => p.location && filters.locations.includes(p.location));
+  }
+  if (filters.projectIDs?.length) {
+    projectsArr = projectsArr.filter(
+      (proj) => filters.projectIDs.includes(proj.id)
+    );
   }
   // date range if you want to filter project-level date
 
