@@ -1,15 +1,21 @@
+// src/pages/admin/WorkerManagementPage.jsx
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { adminUserService } from '../../services/adminUserService';
+import Table from '../../components/common/Table';
+import Tab from '../../components/admin/projects/ProjectsTab'; 
+  // or wherever your Tab component is
 import AddWorkerForm from '../../components/admin/workers/AddWorkerForm';
-import WorkerDetailsModal from '../../components/admin/workers/WorkerDetailsModal';
 
 const WorkerManagementPage = () => {
+  const navigate = useNavigate();
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedWorker, setSelectedWorker] = useState(null);
+
+  // We'll replicate the "tab" concept, e.g. 'active' vs 'archived'
+  const [activeTab, setActiveTab] = useState('active');
 
   useEffect(() => {
     fetchWorkers();
@@ -18,7 +24,8 @@ const WorkerManagementPage = () => {
   const fetchWorkers = async () => {
     try {
       setLoading(true);
-      const data = await adminUserService.getWorkers();
+      const data = await adminUserService.getWorkers(); 
+      // assume this returns ALL workers, both active + archived
       setWorkers(data);
       setError(null);
     } catch (err) {
@@ -29,19 +36,63 @@ const WorkerManagementPage = () => {
     }
   };
 
-  const handleStatusChange = async (workerId, newStatus) => {
-    try {
-      await adminUserService.updateWorkerStatus(workerId, newStatus);
-      await fetchWorkers();
-    } catch (err) {
-      console.error('Error updating worker status:', err);
-    }
+  // Build tabs: "Active" / "Archived" & their counts
+  const getTabs = () => {
+    const counts = workers.reduce((acc, w) => {
+      // w.status might be 'active' or 'archived'
+      acc[w.status] = (acc[w.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    return [
+      { id: 'active', label: 'Active', count: counts.active || 0 },
+      { id: 'archived', label: 'Archived', count: counts.archived || 0 },
+    ];
   };
 
-  const handleViewDetails = (worker) => {
-    setSelectedWorker(worker);
-    setShowDetailsModal(true);
+  // Filter the workers by the selected tab
+  const getFilteredWorkers = () => {
+    return workers.filter((w) => w.status === activeTab);
   };
+
+  // We'll define columns for the table, similar to how you do in ProjectManagementPage
+  const columns = [
+    {
+      header: 'NAME',
+      cell: ({ row }) => {
+        const worker = row.original;
+        return (
+          <div>
+            <div className="font-medium text-nosco-text">{worker.name}</div>
+            <div className="text-sm text-gray-500">{worker.position}</div>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'EMAIL',
+      accessorKey: 'email',
+    },
+    {
+      header: 'DEPARTMENT',
+      accessorKey: 'department',
+    },
+    {
+      header: 'STATUS',
+      accessorKey: 'status',
+      cell: ({ getValue }) => (
+        <span
+          className={`px-3 py-1 rounded-full text-sm font-medium ${
+            getValue() === 'active'
+              ? 'bg-green-100 text-green-800'
+              : 'bg-gray-100 text-gray-800'
+          }`}
+        >
+          {getValue()}
+        </span>
+      ),
+    },
+  ];
 
   if (loading) {
     return (
@@ -53,6 +104,7 @@ const WorkerManagementPage = () => {
 
   return (
     <div className="p-6">
+      {/* Header & Add Button */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold">Worker Management</h1>
         <button
@@ -63,96 +115,31 @@ const WorkerManagementPage = () => {
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b">
-              <th className="text-left p-4 text-nosco-text font-medium">NAME</th>
-              <th className="text-left p-4 text-nosco-text font-medium">EMAIL</th>
-              <th className="text-left p-4 text-nosco-text font-medium">DEPARTMENT</th>
-              <th className="text-left p-4 text-nosco-text font-medium">STATUS</th>
-              <th className="text-left p-4 text-nosco-text font-medium">ACTIONS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {workers.map((worker) => (
-              <tr key={worker.id} className="border-b">
-                <td className="p-4">
-                  <div className="flex items-center">
-                    {worker.profilePic ? (
-                      <img
-                        src={worker.profilePic}
-                        alt={worker.name}
-                        className="w-10 h-10 rounded-full mr-3 object-cover"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-gray-200 mr-3 flex items-center justify-center text-gray-600">
-                        {worker.name.charAt(0)}
-                      </div>
-                    )}
-                    <div>
-                      <div className="font-medium text-nosco-text">{worker.name}</div>
-                      <div className="text-sm text-gray-500">{worker.position}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="p-4 text-nosco-text">{worker.email}</td>
-                <td className="p-4 text-nosco-text">{worker.department}</td>
-                <td className="p-4">
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    worker.status === 'active' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {worker.status}
-                  </span>
-                </td>
-                <td className="p-4">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleViewDetails(worker)}
-                      className="px-4 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors duration-200"
-                    >
-                      Details
-                    </button>
-                    <button
-                      onClick={() => handleStatusChange(
-                        worker.id,
-                        worker.status === 'active' ? 'archived' : 'active'
-                      )}
-                      className={`px-4 py-1 rounded transition-colors duration-200 ${
-                        worker.status === 'active'
-                          ? 'bg-red-50 text-nosco-red hover:bg-red-100'
-                          : 'bg-green-50 text-green-600 hover:bg-green-100'
-                      }`}
-                    >
-                      {worker.status === 'active' ? 'Archive' : 'Activate'}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Tab bar like the project approach */}
+      <div className="mb-6">
+        <Tab
+          tabs={getTabs()}
+          activeTab={activeTab}
+          onChange={setActiveTab}
+        />
       </div>
 
+      {/* Table listing workers for the current tab */}
+      <div className="bg-white rounded-lg shadow-sm">
+        <Table
+          data={getFilteredWorkers()}
+          columns={columns}
+          emptyMessage={`No ${activeTab} workers found`}
+          onRowClick={(row) => navigate(`/admin/workers/${row.id}`)}
+        />
+      </div>
+
+      {/* Add Worker Modal */}
       {showAddModal && (
         <AddWorkerForm
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           onWorkerAdded={fetchWorkers}
-        />
-      )}
-
-      {showDetailsModal && selectedWorker && (
-        <WorkerDetailsModal
-          isOpen={showDetailsModal}
-          onClose={() => {
-            setShowDetailsModal(false);
-            setSelectedWorker(null);
-          }}
-          worker={selectedWorker}
-          onWorkerUpdated={fetchWorkers}
         />
       )}
     </div>

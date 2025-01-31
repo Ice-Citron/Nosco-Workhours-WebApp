@@ -1,6 +1,8 @@
 // src/services/adminUserService.js
-import { firestore } from '../firebase/firebase_config';
-import { collection, query, where, getDocs, doc, updateDoc, addDoc, Timestamp } from 'firebase/firestore';
+import { firestore, auth } from '../firebase/firebase_config';
+import { collection, query, where, getDocs, doc, updateDoc, addDoc, Timestamp, setDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+
 
 export const adminUserService = {
   // Fetch all workers
@@ -27,22 +29,58 @@ export const adminUserService = {
     }
   },
 
-  // Create new worker
+  // Create new worker: also create them in Firebase Auth
   createWorker: async (workerData) => {
     try {
-      const newWorker = {
-        ...workerData,
+      // 1) Create the user in Firebase Auth using email + defaultPassword
+      //    NOTE: This only works if the currently logged-in admin is privileged
+      //    to run createUserWithEmailAndPassword in your client app.
+      //    Otherwise, you'd do this with the Admin SDK on a server or cloud function.
+      const { email, defaultPassword } = workerData;
+      if (!email) throw new Error('Email is required');
+      if (!defaultPassword) {
+        // Optionally require a password or generate a random one
+        throw new Error('A default password is required (for demonstration).');
+      }
+
+      const userCred = await createUserWithEmailAndPassword(auth, email, defaultPassword);
+      const newUid = userCred.user.uid;
+
+      // 2) Build the doc that goes into Firestore
+      const baseRate = parseFloat(workerData.baseRate || 0);
+      const otRate15 = parseFloat(workerData.otRate15 || 0);
+      const otRate20 = parseFloat(workerData.otRate20 || 0);
+      const currency = workerData.currency || 'USD';
+
+      const newWorkerDoc = {
+        name: workerData.name,
+        email: workerData.email,
+        department: workerData.department,
+        position: workerData.position,
         role: 'worker',
         status: 'active',
         createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
         profilePic: '',
-        bankAccounts: []
+        bankAccounts: [],
+        compensation: {
+          baseRate,
+          otRate15,
+          otRate20,
+          currency
+        },
+        // We no longer store the actual password in Firestore 
+        // because Firebase Auth is handling it.
+        // If you REALLY want, you could store "tempPassword" but 
+        // it's strongly discouraged. We'll omit it here.
       };
 
-      const docRef = await addDoc(collection(firestore, 'users'), newWorker);
+      // 3) Write that doc to `users/{newUid}`
+      await setDoc(doc(firestore, 'users', newUid), newWorkerDoc);
+
       return {
-        id: docRef.id,
-        ...newWorker
+        id: newUid,
+        ...newWorkerDoc
       };
     } catch (error) {
       console.error('Error creating worker:', error);

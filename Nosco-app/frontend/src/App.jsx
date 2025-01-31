@@ -43,6 +43,7 @@ import AdminSettingsPage from './pages/admin/AdminSettingsPage';
 import AdminProvider from './context/AdminContext';
 import AdminExpensePage from './pages/admin/AdminExpensePage';
 import WorkerPaymentDetailsPage from './pages/admin/WorkerPaymentDetailsPage';
+import WorkerDetailsPage from './pages/admin/WorkerDetailsPage';
 import ProjectDetailsPage from './pages/admin/ProjectDetailsPage';
 
 import AdminNotificationsPage from './pages/admin/AdminNotificationsPage';
@@ -100,6 +101,7 @@ const AuthenticatedApp = () => {
           <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
           <Route path="/admin/profile" element={<ProtectedRoute><AdminProfilePage /></ProtectedRoute>} />  {/* Add this line */}
           <Route path="/admin/workers" element={<ProtectedRoute><WorkerManagementPage /></ProtectedRoute>} />
+          <Route path="/admin/workers/:workerId" element={<ProtectedRoute><WorkerDetailsPage /></ProtectedRoute>} />
           <Route path="/admin/projects" element={<ProtectedRoute><ProjectManagementPage /></ProtectedRoute>} />
           <Route path="/admin/projects/:projectId/management" element={<ProtectedRoute><ProjectDetailsPage /></ProtectedRoute>} />
 

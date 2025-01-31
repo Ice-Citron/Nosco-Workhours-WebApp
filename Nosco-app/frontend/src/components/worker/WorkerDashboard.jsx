@@ -113,7 +113,7 @@ const WorkerDashboard = () => {
       <div className="mb-8">
         <h2 className="text-2xl font-semibold mb-4">Quick Actions</h2>
         <div className="flex space-x-4">
-          {currentProject.status === 'active' && (
+          {currentProject?.status === 'active' && (
             <button
               onClick={() => navigate('/worker/log-work-hours')}
               className="bg-nosco-red text-white py-2 px-4 rounded hover:bg-nosco-red-dark transition duration-300"
