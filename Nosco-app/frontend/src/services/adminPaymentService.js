@@ -1,15 +1,15 @@
 // src/services/adminPaymentService.js
 
 import { firestore } from '../firebase/firebase_config';
-import { 
-  collection, 
-  query, 
-  where, 
-  orderBy, 
-  onSnapshot, 
-  doc, 
-  getDoc, 
-  updateDoc, 
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+  doc,
+  getDoc,
+  updateDoc,
   Timestamp,
   getDocs,
   arrayUnion,
@@ -17,6 +17,11 @@ import {
 } from 'firebase/firestore';
 
 export const adminPaymentService = {
+  /**
+   * subscribeToAllPayments:
+   * A real-time listener for all payments, filtered by optional status/paymentType,
+   * then ordered by `date desc`.
+   */
   subscribeToAllPayments: (filters = {}, callback) => {
     try {
       const paymentsRef = collection(firestore, 'payments');
@@ -25,7 +30,7 @@ export const adminPaymentService = {
       if (filters.status && filters.status !== 'all') {
         queryConstraints.push(where('status', '==', filters.status));
       }
-      
+
       if (filters.paymentType && filters.paymentType !== 'all') {
         queryConstraints.push(where('paymentType', '==', filters.paymentType));
       }
@@ -34,22 +39,27 @@ export const adminPaymentService = {
 
       const q = query(paymentsRef, ...queryConstraints);
 
-      return onSnapshot(q, 
+      return onSnapshot(
+        q,
         (snapshot) => {
-          const payments = snapshot.docs.map(doc => ({
+          const payments = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
             date: doc.data().date?.toDate?.() || new Date(doc.data().date),
             createdAt: doc.data().createdAt?.toDate?.() || new Date(doc.data().createdAt),
             updatedAt: doc.data().updatedAt?.toDate?.() || new Date(doc.data().updatedAt),
-            comments: doc.data().comments ? {
-              ...doc.data().comments,
-              createdAt: doc.data().comments.createdAt?.toDate?.() || new Date(doc.data().comments.createdAt)
-            } : null,
-            processingHistory: (doc.data().processingHistory || []).map(entry => ({
+            comments: doc.data().comments
+              ? {
+                  ...doc.data().comments,
+                  createdAt:
+                    doc.data().comments.createdAt?.toDate?.() ||
+                    new Date(doc.data().comments.createdAt),
+                }
+              : null,
+            processingHistory: (doc.data().processingHistory || []).map((entry) => ({
               ...entry,
-              timestamp: entry.timestamp?.toDate?.() || new Date(entry.timestamp)
-            }))
+              timestamp: entry.timestamp?.toDate?.() || new Date(entry.timestamp),
+            })),
           }));
           callback(payments);
         },
@@ -65,11 +75,14 @@ export const adminPaymentService = {
     }
   },
 
+  /**
+   * getPaymentDetails: fetch a single payment doc by ID
+   */
   getPaymentDetails: async (paymentId) => {
     try {
       const paymentRef = doc(firestore, 'payments', paymentId);
       const paymentDoc = await getDoc(paymentRef);
-      
+
       if (!paymentDoc.exists()) {
         throw new Error('Payment not found');
       }
@@ -81,14 +94,16 @@ export const adminPaymentService = {
         date: data.date?.toDate?.() || new Date(data.date),
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
         updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
-        comments: data.comments ? {
-          ...data.comments,
-          createdAt: data.comments.createdAt?.toDate?.() || new Date(data.comments.createdAt)
-        } : null,
-        processingHistory: (data.processingHistory || []).map(entry => ({
+        comments: data.comments
+          ? {
+              ...data.comments,
+              createdAt: data.comments.createdAt?.toDate?.() || new Date(data.comments.createdAt),
+            }
+          : null,
+        processingHistory: (data.processingHistory || []).map((entry) => ({
           ...entry,
-          timestamp: entry.timestamp?.toDate?.() || new Date(entry.timestamp)
-        }))
+          timestamp: entry.timestamp?.toDate?.() || new Date(entry.timestamp),
+        })),
       };
     } catch (error) {
       console.error('Error fetching payment details:', error);
@@ -96,28 +111,28 @@ export const adminPaymentService = {
     }
   },
 
+  /**
+   * updatePaymentStatus: set a payment's status, referenceNumber, etc.
+   */
   updatePaymentStatus: async (paymentId, updateDetails) => {
     try {
       const paymentRef = doc(firestore, 'payments', paymentId);
       const paymentDoc = await getDoc(paymentRef);
-      
+
       if (!paymentDoc.exists()) {
         throw new Error('Payment not found');
       }
 
       const { newStatus, paymentMethod, referenceNumber, comment, adminId } = updateDetails;
-
-      // Create history entry
       const historyEntry = {
         status: newStatus,
         paymentMethod,
         referenceNumber,
         comment,
         adminId,
-        timestamp: Timestamp.fromDate(new Date())
+        timestamp: Timestamp.fromDate(new Date()),
       };
 
-      // Update document
       await updateDoc(paymentRef, {
         status: newStatus,
         paymentMethod,
@@ -126,9 +141,9 @@ export const adminPaymentService = {
         comments: {
           text: comment,
           userID: adminId,
-          createdAt: Timestamp.fromDate(new Date())
+          createdAt: Timestamp.fromDate(new Date()),
         },
-        processingHistory: arrayUnion(historyEntry)
+        processingHistory: arrayUnion(historyEntry),
       });
 
       return true;
@@ -138,26 +153,28 @@ export const adminPaymentService = {
     }
   },
 
+  /**
+   * addAdminComment: create a comment inside processingHistory
+   */
   addAdminComment: async (paymentId, comment) => {
     try {
       const paymentRef = doc(firestore, 'payments', paymentId);
-      
-      // Create history entry
+
       const historyEntry = {
         status: 'comment',
         comment: comment.text,
         adminId: comment.adminId,
-        timestamp: Timestamp.fromDate(new Date())
+        timestamp: Timestamp.fromDate(new Date()),
       };
 
       await updateDoc(paymentRef, {
         comments: {
           text: comment.text,
           userID: comment.adminId,
-          createdAt: Timestamp.fromDate(new Date())
+          createdAt: Timestamp.fromDate(new Date()),
         },
         updatedAt: Timestamp.fromDate(new Date()),
-        processingHistory: arrayUnion(historyEntry)
+        processingHistory: arrayUnion(historyEntry),
       });
     } catch (error) {
       console.error('Error adding admin comment:', error);
@@ -165,24 +182,29 @@ export const adminPaymentService = {
     }
   },
 
+  /**
+   * createPayment: add a new doc to the `payments` collection
+   */
   createPayment: async (paymentData) => {
     try {
       const paymentsRef = collection(firestore, 'payments');
-      
+
       const payment = {
         ...paymentData,
         date: Timestamp.fromDate(new Date(paymentData.date)),
         createdAt: Timestamp.fromDate(new Date()),
         updatedAt: Timestamp.fromDate(new Date()),
         status: 'pending',
-        processingHistory: [{
-          status: 'created',
-          comment: paymentData.comments.text,
-          adminId: paymentData.createdBy,
-          timestamp: Timestamp.fromDate(new Date())
-        }]
+        processingHistory: [
+          {
+            status: 'created',
+            comment: paymentData.comments.text,
+            adminId: paymentData.createdBy,
+            timestamp: Timestamp.fromDate(new Date()),
+          },
+        ],
       };
-  
+
       const docRef = await addDoc(paymentsRef, payment);
       return docRef.id;
     } catch (error) {
@@ -190,29 +212,68 @@ export const adminPaymentService = {
       throw error;
     }
   },
-  
+
   addStandaloneComment: async (paymentId, comment) => {
     try {
       const paymentRef = doc(firestore, 'payments', paymentId);
-      
+
       const historyEntry = {
         status: 'comment',
         comment: comment.text,
         adminId: comment.adminId,
-        timestamp: Timestamp.fromDate(new Date())
+        timestamp: Timestamp.fromDate(new Date()),
       };
-  
+
       await updateDoc(paymentRef, {
         comments: {
           text: comment.text,
           userID: comment.adminId,
-          createdAt: Timestamp.fromDate(new Date())
+          createdAt: Timestamp.fromDate(new Date()),
         },
         updatedAt: Timestamp.fromDate(new Date()),
-        processingHistory: arrayUnion(historyEntry)
+        processingHistory: arrayUnion(historyEntry),
       });
     } catch (error) {
       console.error('Error adding standalone comment:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * getPaymentsForWorker: fetch docs where `userID` == workerId, orderBy date desc
+   */
+  getPaymentsForWorker: async (workerId) => {
+    try {
+      const paymentsRef = collection(firestore, 'payments');
+      // We assume your doc uses `userID` to store the worker's ID:
+      const q = query(
+        paymentsRef,
+        where('userID', '==', workerId),
+        orderBy('date', 'desc')
+      );
+
+      const snapshot = await getDocs(q);
+      const results = [];
+
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        results.push({
+          id: docSnap.id,
+          ...data,
+          // parse timestamps
+          date: data.date?.toDate?.() || new Date(data.date),
+          createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
+          updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
+          processingHistory: (data.processingHistory || []).map((entry) => ({
+            ...entry,
+            timestamp: entry.timestamp?.toDate?.() || new Date(entry.timestamp),
+          })),
+        });
+      });
+
+      return results;
+    } catch (error) {
+      console.error('Error fetching payments for worker:', error);
       throw error;
     }
   },

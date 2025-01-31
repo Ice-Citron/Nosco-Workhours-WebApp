@@ -24,31 +24,31 @@ const ExpenseHistoryPage = () => {
 
     useEffect(() => {
         fetchExpenses();
-    }, [user?.uid]); // Add dependency on user.uid
+    }, [user?.uid]);
 
     const fetchExpenses = async () => {
         try {
             if (!user?.uid) return;
             console.log('Current user:', user);
-    
+
             const expensesRef = collection(firestore, 'expense');
             const q = query(
                 expensesRef,
                 where('userID', '==', user.uid),
                 orderBy('date', 'desc')
             );
-    
+
             const snapshot = await getDocs(q);
             console.log('Query response:', {
                 empty: snapshot.empty,
                 size: snapshot.size
             });
-    
+
             const expensesData = await Promise.all(
                 snapshot.docs.map(async (docSnapshot) => {
                     const data = docSnapshot.data();
                     console.log('Processing document:', docSnapshot.id);
-    
+
                     // Safely handle date conversions
                     const safeToDate = (timestamp) => {
                         try {
@@ -58,7 +58,7 @@ const ExpenseHistoryPage = () => {
                             return new Date();
                         }
                     };
-    
+
                     // Safely get project name
                     let projectName = 'General Expense';
                     if (data.projectID) {
@@ -72,7 +72,7 @@ const ExpenseHistoryPage = () => {
                             console.error('Error fetching project:', err);
                         }
                     }
-    
+
                     // Create processed document with safe defaults
                     const processedDoc = {
                         id: docSnapshot.id,
@@ -86,16 +86,15 @@ const ExpenseHistoryPage = () => {
                         status: data.status || 'pending',
                         description: data.description || '',
                         projectName,
-                        pointsAwarded: data.pointsAwarded || 0,
                         adminComments: data.adminComments || '',
                         receipts: Array.isArray(data.receipts) ? data.receipts : []
                     };
-    
+
                     console.log('Processed document:', processedDoc);
                     return processedDoc;
                 })
             );
-    
+
             console.log('Final processed expenses:', expensesData);
             setExpenses(expensesData);
             setError(null);
@@ -117,7 +116,8 @@ const ExpenseHistoryPage = () => {
     };
 
     const exportToCSV = () => {
-        const headers = ['Date', 'Type', 'Amount', 'Currency', 'Project', 'Status', 'Points', 'Description'];
+        // Removed the 'Points' column
+        const headers = ['Date', 'Type', 'Amount', 'Currency', 'Project', 'Status', 'Description'];
         const csvContent = [
             headers.join(','),
             ...filteredData.map(row => [
@@ -127,7 +127,7 @@ const ExpenseHistoryPage = () => {
                 row.currency,
                 row.projectName,
                 row.status,
-                row.pointsAwarded || 0,
+                // Notice we just skip points
                 `"${row.description || ''}"`
             ].join(','))
         ].join('\n');
@@ -139,6 +139,7 @@ const ExpenseHistoryPage = () => {
         link.click();
     };
 
+    // Removed the 'Points' column from the table columns
     const columns = [
         {
             header: 'Date',
@@ -195,11 +196,6 @@ const ExpenseHistoryPage = () => {
                     </span>
                 );
             },
-        },
-        {
-            header: 'Points',
-            accessorKey: 'pointsAwarded',
-            cell: (info) => info.getValue() || '-',
         },
     ];
 
@@ -293,7 +289,6 @@ const ExpenseHistoryPage = () => {
             </div>
 
             <div className="bg-white rounded-lg shadow">
-                {/* Add this console.log here */}
                 {console.log('Data being passed to Table:', {
                     paginatedData,
                     columns,
@@ -377,7 +372,8 @@ const ExpenseHistoryPage = () => {
                 title="Expense Details"
             >
                 {selectedEntry && (
-                    <div className="space-y-4">
+                    // Added p-6 for nicer spacing
+                    <div className="p-6 space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <p className="text-sm font-medium text-gray-500">Date</p>
@@ -425,61 +421,63 @@ const ExpenseHistoryPage = () => {
                             <div>
                                 <p className="text-sm font-medium text-gray-500 mb-2">Receipts</p>
                                 <div className="grid grid-cols-2 gap-4">
-                                {selectedEntry.receipts.map((receipt, index) => (
-                                    <a
-                                        key={index}
-                                        href={receipt}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="block"
-                                    >
-                                        <img
-                                            src={receipt}
-                                            alt={`Receipt ${index + 1}`}
-                                            className="w-full h-48 object-cover rounded-lg hover:opacity-90 transition-opacity"
-                                        />
-                                    </a>
-                                ))}
+                                    {selectedEntry.receipts.map((receipt, index) => (
+                                        <a
+                                            key={index}
+                                            href={receipt}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="block"
+                                        >
+                                            <img
+                                                src={receipt}
+                                                alt={`Receipt ${index + 1}`}
+                                                className="w-full h-48 object-cover rounded-lg hover:opacity-90 transition-opacity"
+                                            />
+                                        </a>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    {selectedEntry.adminComments && (
-                        <div>
-                            <p className="text-sm font-medium text-gray-500">Admin Comments</p>
-                            <p className="mt-1 text-gray-700">{selectedEntry.adminComments}</p>
-                        </div>
-                    )}
+                        {selectedEntry.adminComments && (
+                            <div>
+                                <p className="text-sm font-medium text-gray-500">
+                                    Admin Comments
+                                </p>
+                                <p className="mt-1 text-gray-700">
+                                    {selectedEntry.adminComments}
+                                </p>
+                            </div>
+                        )}
 
-                    {selectedEntry.status === 'rejected' && selectedEntry.rejectionReason && (
-                        <div className="bg-red-50 p-4 rounded-md">
-                            <p className="text-sm font-medium text-red-800">Rejection Reason</p>
-                            <p className="mt-1 text-red-700">{selectedEntry.rejectionReason}</p>
-                        </div>
-                    )}
+                        {selectedEntry.status === 'rejected' && selectedEntry.rejectionReason && (
+                            <div className="bg-red-50 p-4 rounded-md">
+                                <p className="text-sm font-medium text-red-800">Rejection Reason</p>
+                                <p className="mt-1 text-red-700">{selectedEntry.rejectionReason}</p>
+                            </div>
+                        )}
 
-                    {selectedEntry.pointsAwarded && (
-                        <div className="bg-green-50 p-4 rounded-md">
-                            <p className="text-sm font-medium text-green-800">Points Awarded</p>
-                            <p className="mt-1 text-green-700">{selectedEntry.pointsAwarded} points</p>
-                        </div>
-                    )}
+                        {/* 
+                          Removed the pointsAwarded block entirely:
+                          {selectedEntry.pointsAwarded && ( ... )} 
+                        */}
 
-                    {selectedEntry.approvedBy && selectedEntry.approvalDate && (
-                        <div className="bg-gray-50 p-4 rounded-md">
-                            <p className="text-sm text-gray-500">
-                                Approved by: {selectedEntry.approvedBy}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                                Approval Date: {selectedEntry.approvalDate.toLocaleString()}
-                            </p>
-                        </div>
-                    )}
-                </div>
-            )}
-        </Modal>
-    </div>
-);
+                        {selectedEntry.approvedBy && selectedEntry.approvalDate && (
+                            <div className="bg-gray-50 p-4 rounded-md">
+                                <p className="text-sm text-gray-500">
+                                    Approved by: {selectedEntry.approvedBy}
+                                </p>
+                                <p className="text-sm text-gray-500">
+                                    Approval Date: {selectedEntry.approvalDate.toLocaleString()}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </Modal>
+        </div>
+    );
 };
 
 export default ExpenseHistoryPage;
