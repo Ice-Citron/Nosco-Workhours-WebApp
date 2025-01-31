@@ -184,6 +184,31 @@ export const forceRefreshRates = async () => {
 };
 
 
+/**
+ * Convert a numeric value from one currency to another, using your Firestore rates doc.
+ * This will pull the latest doc from Firestore each time you call it. 
+ * In a real app, you might cache the doc in state or context to avoid extra fetches.
+ */
+export const convertBetweenCurrencies = async (value, fromCurrency, toCurrency) => {
+  if (fromCurrency === toCurrency) {
+    return value; // No conversion needed
+  }
+
+  // 1) Fetch the "exchangeRates" doc (which includes `rates: { USD: 1, MYR:4.393, ... }`)
+  const settings = await getExchangeRatesSettings();
+  const { rates = {} } = settings;
+
+  // 2) Grab the from/to rates (default to 1 if missing)
+  const fromRate = rates[fromCurrency] ?? 1;
+  const toRate = rates[toCurrency] ?? 1;
+
+  // 3) Convert
+  // Because these rates are “1 USD = rates[currency]”, 
+  // the formula to go from `fromCurrency` -> `toCurrency` is:
+  //   newValue = oldValue / fromRate * toRate
+  return (value / fromRate) * toRate;
+};
+
 
 
 /*

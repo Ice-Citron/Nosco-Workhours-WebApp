@@ -1,8 +1,19 @@
 // src/services/adminUserService.js
-import { firestore, auth } from '../firebase/firebase_config';
-import { collection, query, where, getDocs, doc, updateDoc, addDoc, Timestamp, setDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 
+import { firestore, auth } from '../firebase/firebase_config';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  updateDoc,
+  addDoc,
+  Timestamp,
+  setDoc,
+  getDoc // <-- import getDoc
+} from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 
 export const adminUserService = {
   // Fetch all workers
@@ -12,16 +23,14 @@ export const adminUserService = {
         collection(firestore, 'users'),
         where('role', '==', 'worker')
       );
-      
       const querySnapshot = await getDocs(q);
       const workers = [];
-      querySnapshot.forEach((doc) => {
+      querySnapshot.forEach((docSnap) => {
         workers.push({
-          id: doc.id,
-          ...doc.data()
+          id: docSnap.id,
+          ...docSnap.data()
         });
       });
-      
       return workers;
     } catch (error) {
       console.error('Error fetching workers:', error);
@@ -33,16 +42,11 @@ export const adminUserService = {
   createWorker: async (workerData) => {
     try {
       // 1) Create the user in Firebase Auth using email + defaultPassword
-      //    NOTE: This only works if the currently logged-in admin is privileged
-      //    to run createUserWithEmailAndPassword in your client app.
-      //    Otherwise, you'd do this with the Admin SDK on a server or cloud function.
       const { email, defaultPassword } = workerData;
       if (!email) throw new Error('Email is required');
       if (!defaultPassword) {
-        // Optionally require a password or generate a random one
-        throw new Error('A default password is required (for demonstration).');
+        throw new Error('A default password is required.');
       }
-
       const userCred = await createUserWithEmailAndPassword(auth, email, defaultPassword);
       const newUid = userCred.user.uid;
 
@@ -68,27 +72,20 @@ export const adminUserService = {
           otRate15,
           otRate20,
           currency
-        },
-        // We no longer store the actual password in Firestore 
-        // because Firebase Auth is handling it.
-        // If you REALLY want, you could store "tempPassword" but 
-        // it's strongly discouraged. We'll omit it here.
+        }
       };
 
       // 3) Write that doc to `users/{newUid}`
       await setDoc(doc(firestore, 'users', newUid), newWorkerDoc);
 
-      return {
-        id: newUid,
-        ...newWorkerDoc
-      };
+      return { id: newUid, ...newWorkerDoc };
     } catch (error) {
       console.error('Error creating worker:', error);
       throw error;
     }
   },
 
-  // Update worker status (active/archived)
+  // Update worker status (active or archived)
   updateWorkerStatus: async (workerId, status) => {
     try {
       const workerRef = doc(firestore, 'users', workerId);
@@ -116,6 +113,7 @@ export const adminUserService = {
     }
   },
 
+  // Get only active workers
   getActiveWorkers: async () => {
     try {
       const usersRef = collection(firestore, 'users');
@@ -124,11 +122,10 @@ export const adminUserService = {
         where('role', '==', 'worker'),
         where('status', '==', 'active')
       );
-      
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+      return snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
       }));
     } catch (error) {
       console.error('Error fetching active workers:', error);
@@ -136,21 +133,20 @@ export const adminUserService = {
     }
   },
 
-  // Get worker details by ID
+  // Get worker details by ID (this was the old "firestore.collection" part)
   getWorkerDetails: async (workerId) => {
     try {
-      const userDoc = await firestore
-        .collection('users')
-        .doc(workerId)
-        .get();
+      // Use modular doc() + getDoc()
+      const userRef = doc(firestore, 'users', workerId);
+      const userSnap = await getDoc(userRef);
 
-      if (!userDoc.exists()) {
+      if (!userSnap.exists()) {
         throw new Error('Worker not found');
       }
 
       return {
-        id: userDoc.id,
-        ...userDoc.data()
+        id: userSnap.id,
+        ...userSnap.data()
       };
     } catch (error) {
       console.error('Error fetching worker details:', error);
