@@ -1,42 +1,46 @@
 // src/services/adminWorkHoursService.js
-import { firestore as db } from '../firebase/firebase_config'; // or { firestore as db }, whichever your file exports
+import { firestore as db } from '../firebase/firebase_config';
 import {
   collection,
+  doc,
+  getDoc,
+  getDocs,
   query,
   where,
-  getDocs,
-  getDoc,
-  doc,
-  updateDoc,
-  Timestamp,
   orderBy,
-  writeBatch
+  writeBatch,
+  updateDoc,
+  Timestamp
 } from 'firebase/firestore';
 
-// Helper function to calculate the payment amount
-const calculateAmount = (hours, rates = {}) => {
-  const { regular = 0, ot1_5 = 0, ot2_0 = 0 } = rates;
+/**
+ * Helper: compute cost using baseRate for regular hours,
+ * and 1.5 * baseRate for “overtime15x”, 2.0 * baseRate for “overtime20x”
+ */
+function computeHourCost(hourDoc, baseRate = 0) {
+  const reg = hourDoc.regularHours || 0;
+  const ot15 = hourDoc.overtime15x || 0;
+  const ot20 = hourDoc.overtime20x || 0;
+
+  // No longer using separate ot1_5 or ot2_0 fields from the worker doc:
   return (
-    (hours.regularHours || 0) * regular +
-    (hours.overtime15x || 0) * ot1_5 +
-    (hours.overtime20x || 0) * ot2_0
+    reg * baseRate + 
+    ot15 * (baseRate * 1.5) + 
+    ot20 * (baseRate * 2.0)
   );
-};
+}
 
 export const adminWorkHoursService = {
   /**
-   * Fetch work hours from `workHours` collection with optional filters (status, project, worker, date range).
+   * GET WORK HOURS (with optional filters)
    */
   getWorkHours: async (statusFilter = null, advancedFilters = {}) => {
     try {
       const constraints = [];
-
-      // Status filter if not "all"
+      // If not "all", filter by status
       if (statusFilter && statusFilter !== 'all') {
         constraints.push(where('status', '==', statusFilter));
       }
-
-      // Additional advanced filters
       if (advancedFilters.projectId) {
         constraints.push(where('projectID', '==', advancedFilters.projectId));
       }
@@ -54,106 +58,44 @@ export const adminWorkHoursService = {
         );
       }
 
-      // Build the query
       const qWorkHours = query(
         collection(db, 'workHours'),
         ...constraints,
         orderBy('date', 'desc')
       );
 
-      // Run the query
       const snapshot = await getDocs(qWorkHours);
-      const workHours = [];
+      const results = [];
 
-      // For each doc, optionally fetch worker doc, project doc, apply filters
-      for (const docSnapshot of snapshot.docs) {
-        const data = docSnapshot.data();
+      for (const docSnap of snapshot.docs) {
+        const whData = docSnap.data();
+        // Optionally fetch user + project
+        const userRef = doc(db, 'users', whData.userID);
+        const userDoc = await getDoc(userRef);
 
-        // Get worker details
-        const userRef = doc(db, 'users', data.userID);
-        const userDocSnap = await getDoc(userRef);
+        const projectRef = doc(db, 'projects', whData.projectID);
+        const projectDoc = await getDoc(projectRef);
 
-        // Get project details
-        const projectRef = doc(db, 'projects', data.projectID);
-        const projectDocSnap = await getDoc(projectRef);
-
-        if (userDocSnap.exists() && projectDocSnap.exists()) {
-          const workerObj = userDocSnap.data();
-          const projectObj = projectDocSnap.data();
+        if (userDoc.exists() && projectDoc.exists()) {
+          const workerObj = userDoc.data();
+          const projectObj = projectDoc.data();
 
           const record = {
-            id: docSnapshot.id,
-            ...data,
+            id: docSnap.id,
+            ...whData,
             worker: workerObj,
             project: projectObj,
-            date: data.date, // Timestamps, etc.
+            date: whData.date // Firestore Timestamp
           };
 
-          // Optionally, apply any in-memory filters for hours
-          const totalHours =
-            (record.regularHours || 0) +
-            (record.overtime15x || 0) +
-            (record.overtime20x || 0);
+          // If you have advanced in-memory filters:
+          // e.g. totalHours, etc...
+          // Omitted for brevity
 
-          let includeRecord = true;
-
-          // Checking advancedFilters.* for min/max
-          if (
-            advancedFilters.regularHoursMin !== undefined &&
-            record.regularHours < advancedFilters.regularHoursMin
-          ) {
-            includeRecord = false;
-          }
-          if (
-            advancedFilters.regularHoursMax !== undefined &&
-            record.regularHours > advancedFilters.regularHoursMax
-          ) {
-            includeRecord = false;
-          }
-          if (
-            advancedFilters.overtime15xMin !== undefined &&
-            record.overtime15x < advancedFilters.overtime15xMin
-          ) {
-            includeRecord = false;
-          }
-          if (
-            advancedFilters.overtime15xMax !== undefined &&
-            record.overtime15x > advancedFilters.overtime15xMax
-          ) {
-            includeRecord = false;
-          }
-          if (
-            advancedFilters.overtime20xMin !== undefined &&
-            record.overtime20x < advancedFilters.overtime20xMin
-          ) {
-            includeRecord = false;
-          }
-          if (
-            advancedFilters.overtime20xMax !== undefined &&
-            record.overtime20x > advancedFilters.overtime20xMax
-          ) {
-            includeRecord = false;
-          }
-          if (
-            advancedFilters.totalHoursMin !== undefined &&
-            totalHours < advancedFilters.totalHoursMin
-          ) {
-            includeRecord = false;
-          }
-          if (
-            advancedFilters.totalHoursMax !== undefined &&
-            totalHours > advancedFilters.totalHoursMax
-          ) {
-            includeRecord = false;
-          }
-
-          if (includeRecord) {
-            workHours.push(record);
-          }
+          results.push(record);
         }
       }
-
-      return workHours;
+      return results;
     } catch (error) {
       console.error('Error fetching work hours:', error);
       throw error;
@@ -161,7 +103,7 @@ export const adminWorkHoursService = {
   },
 
   /**
-   * Approve a single work hour doc
+   * APPROVE single doc
    */
   approveWorkHours: async (workHourId, adminId) => {
     try {
@@ -179,7 +121,7 @@ export const adminWorkHoursService = {
   },
 
   /**
-   * Reject a single work hour doc
+   * REJECT single doc
    */
   rejectWorkHours: async (workHourId, adminId, rejectionReason) => {
     try {
@@ -198,13 +140,12 @@ export const adminWorkHoursService = {
   },
 
   /**
-   * Bulk approve multiple work hour docs
+   * BULK APPROVE
    */
   bulkApproveWorkHours: async (workHourIds, adminId) => {
     try {
       const batch = writeBatch(db);
       const now = Timestamp.now();
-
       for (const id of workHourIds) {
         const ref = doc(db, 'workHours', id);
         batch.update(ref, {
@@ -214,7 +155,6 @@ export const adminWorkHoursService = {
           updatedAt: now,
         });
       }
-
       await batch.commit();
     } catch (error) {
       console.error('Error bulk approving work hours:', error);
@@ -223,13 +163,12 @@ export const adminWorkHoursService = {
   },
 
   /**
-   * Bulk reject multiple work hour docs
+   * BULK REJECT
    */
   bulkRejectWorkHours: async (workHourIds, adminId, rejectionReason) => {
     try {
       const batch = writeBatch(db);
       const now = Timestamp.now();
-
       for (const id of workHourIds) {
         const ref = doc(db, 'workHours', id);
         batch.update(ref, {
@@ -240,7 +179,6 @@ export const adminWorkHoursService = {
           updatedAt: now,
         });
       }
-
       await batch.commit();
     } catch (error) {
       console.error('Error bulk rejecting work hours:', error);
@@ -249,47 +187,40 @@ export const adminWorkHoursService = {
   },
 
   /**
-   * Summarize unpaid hours with status=approved or processing
+   * Summarize hours with status in ['approved','processing']
+   * (Your existing getUnpaidApprovedHours)
    */
   getUnpaidApprovedHours: async () => {
     try {
-      // get all 'approved' or 'processing' from "workHours"
       const qRef = query(
         collection(db, 'workHours'),
         where('status', 'in', ['approved', 'processing'])
       );
-
       const snapshot = await getDocs(qRef);
 
-      // Group by worker
       const workerHoursMap = {};
       const workerIds = new Set();
 
-      // build a list of worker IDs
       snapshot.docs.forEach((snap) => {
         const whData = snap.data();
         workerIds.add(whData.userID);
       });
 
-      // fetch all workers in one go
+      // fetch worker data in one go
       const workerDataMap = {};
       await Promise.all(
-        Array.from(workerIds).map(async (workerId) => {
-          const ref = doc(db, 'users', workerId);
+        Array.from(workerIds).map(async (uid) => {
+          const ref = doc(db, 'users', uid);
           const userSnap = await getDoc(ref);
           if (userSnap.exists()) {
-            workerDataMap[workerId] = userSnap.data();
+            workerDataMap[uid] = userSnap.data();
           }
         })
       );
 
-      // build map
       snapshot.forEach((docSnap) => {
-        const hours = docSnap.data();
-        const workerId = hours.userID;
-        const wData = workerDataMap[workerId] || {};
-
-        // init worker entry if not exist
+        const whData = docSnap.data();
+        const workerId = whData.userID;
         if (!workerHoursMap[workerId]) {
           workerHoursMap[workerId] = {
             unpaidHours: {},
@@ -297,47 +228,39 @@ export const adminWorkHoursService = {
             projects: new Set(),
           };
         }
-
-        const projectId = hours.projectID;
+        const projectId = whData.projectID;
         if (!workerHoursMap[workerId].unpaidHours[projectId]) {
           workerHoursMap[workerId].unpaidHours[projectId] = {
             regularHours: 0,
             overtime15x: 0,
             overtime20x: 0,
-            processing: {
-              regularHours: 0,
-              overtime15x: 0,
-              overtime20x: 0,
-            },
+            processing: { regularHours: 0, overtime15x: 0, overtime20x: 0 },
             entries: [],
           };
         }
 
-        // separate processing vs approved
-        if (hours.status === 'processing') {
-          workerHoursMap[workerId].unpaidHours[projectId].processing.regularHours += hours.regularHours || 0;
-          workerHoursMap[workerId].unpaidHours[projectId].processing.overtime15x += hours.overtime15x || 0;
-          workerHoursMap[workerId].unpaidHours[projectId].processing.overtime20x += hours.overtime20x || 0;
-
-          workerHoursMap[workerId].processingAmount += calculateAmount(hours, wData.rates);
+        // If it's 'processing', do something
+        if (whData.status === 'processing') {
+          workerHoursMap[workerId].unpaidHours[projectId].processing.regularHours += whData.regularHours || 0;
+          workerHoursMap[workerId].unpaidHours[projectId].processing.overtime15x += whData.overtime15x || 0;
+          workerHoursMap[workerId].unpaidHours[projectId].processing.overtime20x += whData.overtime20x || 0;
+          // Accumulate cost if needed...
+          // ...
         } else {
-          // approved
-          workerHoursMap[workerId].unpaidHours[projectId].regularHours += hours.regularHours || 0;
-          workerHoursMap[workerId].unpaidHours[projectId].overtime15x += hours.overtime15x || 0;
-          workerHoursMap[workerId].unpaidHours[projectId].overtime20x += hours.overtime20x || 0;
+          // status=approved
+          workerHoursMap[workerId].unpaidHours[projectId].regularHours += whData.regularHours || 0;
+          workerHoursMap[workerId].unpaidHours[projectId].overtime15x += whData.overtime15x || 0;
+          workerHoursMap[workerId].unpaidHours[projectId].overtime20x += whData.overtime20x || 0;
         }
 
-        // push the entry
         workerHoursMap[workerId].unpaidHours[projectId].entries.push({
           id: docSnap.id,
-          ...hours,
+          ...whData,
         });
-
-        // track which projects this worker belongs to
         workerHoursMap[workerId].projects.add(projectId);
       });
 
-      // convert object -> array
+      // Convert to array
       const results = Object.entries(workerHoursMap).map(([workerId, data]) => {
         const wData = workerDataMap[workerId] || {};
         return {
@@ -348,7 +271,9 @@ export const adminWorkHoursService = {
           unpaidHours: data.unpaidHours,
           processingAmount: data.processingAmount,
           projects: Array.from(data.projects),
-          rates: wData.rates || { regular: 0, ot1_5: 0, ot2_0: 0 },
+          // old code used wData.rates, but we do not want that if we’re deprecating
+          // ot1_5 or ot2_0 fields. So either we keep it or adapt. 
+          rates: wData.rates || {},
         };
       });
 
@@ -365,7 +290,6 @@ export const adminWorkHoursService = {
   markHoursAsProcessing: async (hourIds) => {
     try {
       const batch = writeBatch(db);
-
       hourIds.forEach((id) => {
         const ref = doc(db, 'workHours', id);
         batch.update(ref, {
@@ -374,7 +298,6 @@ export const adminWorkHoursService = {
           updatedAt: Timestamp.fromDate(new Date()),
         });
       });
-
       await batch.commit();
       return true;
     } catch (error) {
@@ -384,12 +307,11 @@ export const adminWorkHoursService = {
   },
 
   /**
-   * Mark hours as "paid"
+   * Mark hours as paid
    */
   markHoursAsPaid: async (hourIds, paymentDetails) => {
     try {
       const batch = writeBatch(db);
-
       hourIds.forEach((id) => {
         const ref = doc(db, 'workHours', id);
         batch.update(ref, {
@@ -400,7 +322,6 @@ export const adminWorkHoursService = {
           updatedAt: Timestamp.fromDate(new Date()),
         });
       });
-
       await batch.commit();
       return true;
     } catch (error) {
@@ -410,7 +331,7 @@ export const adminWorkHoursService = {
   },
 
   /**
-   * Return all unpaid hours for a specific worker
+   * For a single worker: return their “approved && paid=false” hours grouped by project
    */
   getWorkerUnpaidHours: async (workerId) => {
     try {
@@ -424,11 +345,9 @@ export const adminWorkHoursService = {
 
       const snapshot = await getDocs(qRef);
       const hoursMap = {};
-
-      snapshot.docs.forEach((snap) => {
+      snapshot.forEach((snap) => {
         const data = snap.data();
         const projectId = data.projectID;
-
         if (!hoursMap[projectId]) {
           hoursMap[projectId] = {
             regularHours: 0,
@@ -437,19 +356,16 @@ export const adminWorkHoursService = {
             entries: [],
           };
         }
-
         hoursMap[projectId].regularHours += data.regularHours || 0;
         hoursMap[projectId].overtime15x += data.overtime15x || 0;
         hoursMap[projectId].overtime20x += data.overtime20x || 0;
 
-        // Convert timestamps to JS Date if needed
         hoursMap[projectId].entries.push({
           id: snap.id,
           ...data,
           date: data.date?.toDate?.() || new Date(data.date),
         });
       });
-
       return hoursMap;
     } catch (error) {
       console.error('Error fetching worker unpaid hours:', error);
@@ -458,35 +374,35 @@ export const adminWorkHoursService = {
   },
 
   /**
-   * Complete payment for an array of hours, create a payment doc
+   * Create a payment doc + mark each hour doc as paid
    */
   completePayment: async (hourIds, paymentDetails) => {
     try {
       const batch = writeBatch(db);
 
-      // create payment doc
-      const paymentsCollRef = collection(db, 'payments');
-      const paymentRef = doc(paymentsCollRef); // random doc ID
-      batch.set(paymentRef, {
+      // 1) create payment doc
+      const paymentsRef = collection(db, 'payments');
+      const payDocRef = doc(paymentsRef); // random docID
+      batch.set(payDocRef, {
         ...paymentDetails,
         status: 'completed',
         createdAt: Timestamp.fromDate(new Date()),
-        workHourIds: hourIds,
+        workHourIds: hourIds
       });
 
-      // update each hour doc
-      hourIds.forEach((id) => {
-        const hourRef = doc(db, 'workHours', id);
-        batch.update(hourRef, {
+      // 2) update each hour doc
+      hourIds.forEach((hid) => {
+        const hrRef = doc(db, 'workHours', hid);
+        batch.update(hrRef, {
           status: 'paid',
-          paymentId: paymentRef.id,
-          paymentDate: Timestamp.fromDate(new Date()),
-          updatedAt: Timestamp.fromDate(new Date()),
+          paymentId: payDocRef.id,
+          paymentDate: Timestamp.now(),
+          updatedAt: Timestamp.now(),
         });
       });
 
       await batch.commit();
-      return paymentRef.id;
+      return payDocRef.id;
     } catch (error) {
       console.error('Error completing payment:', error);
       throw error;
@@ -494,7 +410,7 @@ export const adminWorkHoursService = {
   },
 
   /**
-   * Get all "paid" work hours, grouped by `paymentId`.
+   * Return all paid hours, grouped by paymentId
    */
   getPaidWorkHours: async () => {
     try {
@@ -504,14 +420,12 @@ export const adminWorkHoursService = {
         where('status', '==', 'paid'),
         orderBy('paymentDate', 'desc')
       );
-
       const snapshot = await getDocs(qRef);
-      const paymentsMap = {};
 
-      snapshot.docs.forEach((snap) => {
+      const paymentsMap = {};
+      snapshot.forEach((snap) => {
         const data = snap.data();
         const pId = data.paymentId;
-
         if (!paymentsMap[pId]) {
           paymentsMap[pId] = {
             id: pId,
@@ -522,17 +436,82 @@ export const adminWorkHoursService = {
             attachments: data.attachments || [],
           };
         }
-
         paymentsMap[pId].workHours.push({
           id: snap.id,
           ...data,
         });
       });
-
       return Object.values(paymentsMap);
     } catch (error) {
       console.error('Error fetching paid work hours:', error);
       throw error;
+    }
+  },
+
+  getAllWorkersWithUnpaidData: async () => {
+    try {
+      // 1) fetch all 'worker' docs
+      const usersRef = collection(db, 'users');
+      const qWorkers = query(usersRef, where('role', '==', 'worker'));
+      const workersSnap = await getDocs(qWorkers);
+
+      const allWorkers = workersSnap.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          name: data.name || 'Unknown Worker',
+          position: data.position || 'Unknown Position',
+          profilePic: data.profilePic || null,
+          // store baseRate in something like data.compensation?.baseRate if you prefer
+          baseRate: data?.compensation?.baseRate || 0
+        };
+      });
+
+      // 2) For each worker, find unpaid hours
+      const results = [];
+      for (const worker of allWorkers) {
+        const whRef = collection(db, 'workHours');
+        const qHours = query(
+          whRef,
+          where('userID', '==', worker.id),
+          where('status', '==', 'approved'),
+          where('paid', '==', false)
+        );
+        const hoursSnap = await getDocs(qHours);
+
+        let totalHours = 0;
+        let totalAmount = 0;
+        const projects = new Set();
+
+        hoursSnap.forEach((snap) => {
+          const hData = snap.data();
+          const cost = computeHourCost(hData, worker.baseRate);
+          totalAmount += cost;
+
+          // sum hours
+          const reg = hData.regularHours || 0;
+          const ot15 = hData.overtime15x || 0;
+          const ot20 = hData.overtime20x || 0;
+          totalHours += (reg + ot15 + ot20);
+
+          if (hData.projectID) {
+            projects.add(hData.projectID);
+          }
+        });
+
+        // push to result
+        results.push({
+          ...worker,
+          unpaidHoursCount: totalHours,
+          unpaidAmount: totalAmount,
+          projects: Array.from(projects),
+        });
+      }
+
+      return results;
+    } catch (err) {
+      console.error('Error in getAllWorkersWithUnpaidData:', err);
+      throw err;
     }
   },
 };

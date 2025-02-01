@@ -194,7 +194,7 @@ export const adminPaymentService = {
         date: Timestamp.fromDate(new Date(paymentData.date)),
         createdAt: Timestamp.fromDate(new Date()),
         updatedAt: Timestamp.fromDate(new Date()),
-        status: 'pending',
+        status: 'processing',
         processingHistory: [
           {
             status: 'created',

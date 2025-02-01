@@ -1,217 +1,455 @@
+// src/pages/admin/WorkerPaymentDetailsPage.jsx
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { format } from 'date-fns'; // Added this import
+import { format } from 'date-fns';
 import { adminWorkHoursService } from '../../services/adminWorkHoursService';
-import { useAuth } from '../../context/AuthContext'; // Added this import
-import { doc, getDoc } from 'firebase/firestore'; // Added these imports
+import { adminExpenseService } from '../../services/adminExpenseService';
+import { useAuth } from '../../context/AuthContext';
+import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from '../../firebase/firebase_config';
+
 import Card from '../../components/common/Card';
 import Table from '../../components/common/Table';
 import Button from '../../components/common/Button';
-import { ArrowLeft, Clock, DollarSign } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
+import AddBonusModal from '../../components/admin/payments/AddBonusModal'; 
+
+
+/**
+ * Helper to calculate the cost of a single hour entry
+ * using worker's baseRate and applying 1.5x or 2.0x for overtime.
+ */
+function calculateHourCost(entry, compensation) {
+  // e.g. compensation = { baseRate: 21, currency: "USD", ... }
+  const baseRate = compensation?.baseRate || 0;
+
+  // Regular = baseRate * regularHours
+  const regularCost = (entry.regularHours || 0) * baseRate;
+
+  // OT 1.5x = baseRate * 1.5 * overtime15x
+  const ot15Cost = (entry.overtime15x || 0) * (baseRate * 1.5);
+
+  // OT 2.0x = baseRate * 2.0 * overtime20x
+  const ot20Cost = (entry.overtime20x || 0) * (baseRate * 2.0);
+
+  return regularCost + ot15Cost + ot20Cost;
+}
 
 const WorkerPaymentDetailsPage = () => {
-    const { workerId } = useParams();
-    const navigate = useNavigate();
-    const { user } = useAuth(); // Added this hook
-    const [workerData, setWorkerData] = useState(null);
-    const [unpaidHours, setUnpaidHours] = useState({});
-    const [loading, setLoading] = useState(true);
-    const [selectedEntries, setSelectedEntries] = useState({});
-  
-    useEffect(() => {
-      const loadWorkerDetails = async () => {
-        try {
-          setLoading(true);
-          // Get worker details
-          const workerRef = doc(firestore, 'users', workerId);
-          const workerSnap = await getDoc(workerRef);
-          
-          if (!workerSnap.exists()) {
-            throw new Error('Worker not found');
-          }
-          
-          const workerDetails = workerSnap.data();
-          setWorkerData(workerDetails);
-  
-          // Get unpaid hours
-          const hours = await adminWorkHoursService.getWorkerUnpaidHours(workerId);
-          setUnpaidHours(hours);
-        } catch (error) {
-          console.error('Error loading worker details:', error);
-        } finally {
-          setLoading(false);
-        }
-      };
-  
-      loadWorkerDetails();
-    }, [workerId]);
-  
-    const calculateTotalAmount = () => {
-      let total = 0;
-      Object.entries(selectedEntries).forEach(([projectId, entries]) => {
-        entries.forEach(entry => {
-          if (entry.selected) {
-            const rates = workerData?.rates || {};
-            total += (entry.regularHours || 0) * (rates.regular || 0);
-            total += (entry.overtime15x || 0) * (rates.ot1_5 || 0);
-            total += (entry.overtime20x || 0) * (rates.ot2_0 || 0);
-          }
-        });
-      });
-      return total;
-    };
-  
-    const handleProcessPayment = async () => {
-      // Get all selected entry IDs
-      const selectedIds = Object.values(selectedEntries)
-        .flatMap(entries => 
-          entries
-            .filter(entry => entry.selected)
-            .map(entry => entry.id)
-        );
-  
-      if (selectedIds.length === 0) return;
-  
+  const { workerId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const [workerData, setWorkerData] = useState(null);
+  const [projectMap, setProjectMap] = useState({});
+  // projectMap: { [projectId]: { hours: [...], expenses: [...] } }
+  const [loading, setLoading] = useState(true);
+  const [bonusModalOpen, setBonusModalOpen] = useState(false);
+
+  // For selected items
+  const [selectedHours, setSelectedHours] = useState({});
+  // shape: { projectId: [ { ...hourDoc, selected: true } ] }
+  const [selectedExpenses, setSelectedExpenses] = useState({});
+  // shape: { projectId: [ { ...expenseDoc, selected: true } ] }
+
+  const handleAddBonus = () => {
+    setBonusModalOpen(true);
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
       try {
-        const reference = `PAY-${Date.now()}`;
-        await adminWorkHoursService.markHoursAsPaid(selectedIds, {
+        setLoading(true);
+
+        // 1) Fetch worker doc
+        const workerRef = doc(firestore, 'users', workerId);
+        const workerSnap = await getDoc(workerRef);
+        if (!workerSnap.exists()) {
+          throw new Error('Worker not found');
+        }
+        const workerDetails = workerSnap.data();
+        setWorkerData(workerDetails);
+
+        // 2) Fetch all UNPAID hours for this worker
+        // returns an object keyed by project => { entries: [ ... ] }
+        const hoursResult = await adminWorkHoursService.getWorkerUnpaidHours(workerId);
+
+        // 3) Fetch all UNPAID expenses for this worker
+        // returns an array of expense docs
+        const expensesResult = await adminExpenseService.getWorkerUnpaidExpenses(workerId);
+
+        // 4) Merge them into a single `projectMap`
+        const map = {};
+
+        // a) incorporate hours
+        Object.keys(hoursResult).forEach((pid) => {
+          map[pid] = {
+            hours: hoursResult[pid].entries || [],
+            expenses: []
+          };
+        });
+
+        // b) incorporate expenses
+        expensesResult.forEach((exp) => {
+          const pid = exp.projectID || '__GENERAL__'; // fallback if no projectID
+          if (!map[pid]) {
+            map[pid] = { hours: [], expenses: [] };
+          }
+          map[pid].expenses.push(exp);
+        });
+
+        setProjectMap(map);
+      } catch (error) {
+        console.error('Error loading worker data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [workerId]);
+
+  // Utility: format date
+  const formatDate = (val) => {
+    if (!val) return 'N/A';
+    try {
+      return format(val, 'MMM dd, yyyy');
+    } catch (err) {
+      return 'Invalid date';
+    }
+  };
+
+  // Sum of selected hour items
+  const calculateSelectedHoursTotal = () => {
+    if (!workerData) return 0;
+    const compensation = workerData.compensation || { baseRate: 0 };
+    let total = 0;
+
+    Object.values(selectedHours).forEach((arr) => {
+      arr.forEach((entry) => {
+        if (entry.selected) {
+          total += calculateHourCost(entry, compensation);
+        }
+      });
+    });
+    return total;
+  };
+
+  // Sum of selected expense items
+  const calculateSelectedExpensesTotal = () => {
+    let total = 0;
+    Object.values(selectedExpenses).forEach((arr) => {
+      arr.forEach((item) => {
+        if (item.selected) {
+          total += item.amount || 0;
+        }
+      });
+    });
+    return total;
+  };
+
+  // Combined total
+  const calculateTotalAmount = () => {
+    return calculateSelectedHoursTotal() + calculateSelectedExpensesTotal();
+  };
+
+  // Processing payment
+  const handleProcessPayment = async () => {
+    const totalAmt = calculateTotalAmount();
+    if (totalAmt <= 0) return;
+
+    // 1) Gather selected hour IDs
+    const selectedHourIds = [];
+    Object.values(selectedHours).forEach((arr) => {
+      arr.forEach((entry) => {
+        if (entry.selected) {
+          selectedHourIds.push(entry.id);
+        }
+      });
+    });
+
+    // 2) Gather selected expense IDs
+    const selectedExpenseIds = [];
+    Object.values(selectedExpenses).forEach((arr) => {
+      arr.forEach((exp) => {
+        if (exp.selected) {
+          selectedExpenseIds.push(exp.id);
+        }
+      });
+    });
+
+    if (selectedHourIds.length === 0 && selectedExpenseIds.length === 0) {
+      return; // nothing selected
+    }
+
+    const reference = `PAY-${Date.now()}`;
+
+    try {
+      // Mark hours as paid
+      if (selectedHourIds.length > 0) {
+        await adminWorkHoursService.markHoursAsPaid(selectedHourIds, {
           reference,
-          amount: calculateTotalAmount(),
+          amount: totalAmt,
           processedBy: user.uid,
           processedAt: new Date()
         });
-  
-        // Redirect back to payment processing page
-        navigate('/admin/payments');
-      } catch (error) {
-        console.error('Error processing payment:', error);
       }
-    };
-  
-    if (loading) {
-      return (
-        <div className="p-6">
-          <Card>Loading...</Card>
-        </div>
-      );
-    }
-  
-    if (!workerData) {
-      return (
-        <div className="p-6">
-          <Card>Worker not found</Card>
-        </div>
-      );
-    }
-  
-    const formatDate = (date) => {
-      try {
-        const dateObj = date?.toDate?.() ? date.toDate() : new Date(date);
-        return format(dateObj, 'MMM dd, yyyy');
-      } catch (error) {
-        console.error('Error formatting date:', error);
-        return 'Invalid date';
+
+      // Mark expenses as paid
+      if (selectedExpenseIds.length > 0) {
+        await adminExpenseService.markExpensesAsPaid(selectedExpenseIds, {
+          reference,
+          amount: totalAmt,
+          processedBy: user.uid,
+          processedAt: new Date()
+        });
       }
-    };
-  
+
+      // Optionally create a Payment doc, or just navigate away
+      navigate('/admin/payments');
+    } catch (error) {
+      console.error('Error processing payment:', error);
+    }
+  };
+
+  // Render UI
+  if (loading) {
     return (
       <div className="p-6">
-        <button 
-          onClick={() => navigate('/admin/payments')}
-          className="mb-4 flex items-center text-gray-600 hover:text-gray-900"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Payments
-        </button>
-  
-        <Card className="mb-4">
-          <div className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <img 
-                  src={workerData.profilePic || '/api/placeholder/64/64'} 
-                  alt={workerData.name}
-                  className="h-16 w-16 rounded-full"
-                />
-                <div className="ml-4">
-                  <h2 className="text-2xl font-semibold">{workerData.name}</h2>
-                  <p className="text-gray-500">{workerData.position}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm text-gray-500">Total Selected Amount</div>
-                <div className="text-2xl font-bold">
-                  ${calculateTotalAmount().toLocaleString()}
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-  
-        {Object.entries(unpaidHours).map(([projectId, projectHours]) => (
-          <Card key={projectId} className="mb-4">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Project: {projectId}</h3>
-              <Table
-                data={projectHours.entries}
-                columns={[
-                  {
-                    header: "Date",
-                    accessorKey: "date",
-                    cell: ({ getValue }) => formatDate(getValue())
-                  },
-                  {
-                    header: "Regular Hours",
-                    accessorKey: "regularHours",
-                    cell: ({ getValue }) => getValue() || 0
-                  },
-                  {
-                    header: "OT 1.5x",
-                    accessorKey: "overtime15x",
-                    cell: ({ getValue }) => getValue() || 0
-                  },
-                  {
-                    header: "OT 2.0x",
-                    accessorKey: "overtime20x",
-                    cell: ({ getValue }) => getValue() || 0
-                  },
-                  {
-                    header: "Select",
-                    accessorKey: "id",
-                    cell: ({ row }) => (
-                      <input
-                        type="checkbox"
-                        checked={selectedEntries[projectId]?.find(e => e.id === row.original.id)?.selected || false}
-                        onChange={(e) => {
-                          setSelectedEntries(prev => ({
-                            ...prev,
-                            [projectId]: [
-                              ...(prev[projectId] || []).filter(entry => entry.id !== row.original.id),
-                              { id: row.original.id, selected: e.target.checked, ...row.original }
-                            ]
-                          }));
-                        }}
-                      />
-                    )
-                  }
-                ]}
-              />
-            </div>
-          </Card>
-        ))}
-  
-        <div className="mt-6 flex justify-end">
-          <Button
-            onClick={handleProcessPayment}
-            disabled={calculateTotalAmount() === 0}
-          >
-            Process Payment (${calculateTotalAmount().toLocaleString()})
-          </Button>
-        </div>
+        <Card>Loading...</Card>
       </div>
     );
-  };
-  
-  export default WorkerPaymentDetailsPage;
+  }
+  if (!workerData) {
+    return (
+      <div className="p-6">
+        <Card>Worker not found</Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <button
+        onClick={() => navigate('/admin/payments')}
+        className="mb-4 flex items-center text-gray-600 hover:text-gray-900"
+      >
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to Payments
+      </button>
+
+      {/* Worker Card */}
+      <Card className="mb-4">
+        <div className="p-6 flex items-center justify-between">
+          <div className="flex items-center">
+            <img
+              src={workerData.profilePic || '/api/placeholder/64/64'}
+              alt={workerData.name}
+              className="h-16 w-16 rounded-full"
+            />
+            <div className="ml-4">
+              <h2 className="text-2xl font-semibold">{workerData.name}</h2>
+              <p className="text-gray-500">{workerData.position}</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-sm text-gray-500">Total Selected Amount</div>
+            <div className="text-2xl font-bold">
+              ${calculateTotalAmount().toLocaleString()}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* If no projects */}
+      {Object.keys(projectMap).length === 0 && (
+        <Card className="mb-4">
+          <div className="p-6">
+            <p className="text-gray-500">No unpaid items found for this worker.</p>
+          </div>
+        </Card>
+      )}
+
+      {/* Render each project */}
+      {Object.entries(projectMap).map(([projectId, data]) => {
+        const { hours, expenses } = data;
+
+        return (
+          <Card key={projectId} className="mb-6">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold mb-4">
+                Project: {projectId === '__GENERAL__' ? 'General Expenses' : projectId}
+              </h3>
+
+              {/* HOURS TABLE */}
+              {hours.length > 0 && (
+                <>
+                  <h4 className="text-md font-medium mb-2">Work Hours</h4>
+                  <Table
+                    data={hours}
+                    columns={[
+                      {
+                        header: "Date",
+                        accessorKey: "date",
+                        cell: ({ getValue }) => formatDate(getValue())
+                      },
+                      {
+                        header: "Regular",
+                        accessorKey: "regularHours",
+                        cell: ({ getValue }) => getValue() || 0
+                      },
+                      {
+                        header: "OT 1.5x",
+                        accessorKey: "overtime15x",
+                        cell: ({ getValue }) => getValue() || 0
+                      },
+                      {
+                        header: "OT 2.0x",
+                        accessorKey: "overtime20x",
+                        cell: ({ getValue }) => getValue() || 0
+                      },
+                      {
+                        header: "Cost",
+                        id: "cost",
+                        cell: ({ row }) => {
+                          const entry = row.original;
+                          const cost = calculateHourCost(entry, workerData.compensation);
+                          return `$${cost.toFixed(2)}`;
+                        }
+                      },
+                      {
+                        header: "Select",
+                        id: "selectHour",
+                        cell: ({ row }) => {
+                          const entry = row.original;
+                          const isChecked = selectedHours[projectId]?.some(i => i.id === entry.id && i.selected);
+                          return (
+                            <input
+                              type="checkbox"
+                              checked={!!isChecked}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setSelectedHours((prev) => {
+                                  const oldArr = prev[projectId] || [];
+                                  const filtered = oldArr.filter(i => i.id !== entry.id);
+                                  if (checked) {
+                                    filtered.push({ ...entry, selected: true });
+                                  }
+                                  return {
+                                    ...prev,
+                                    [projectId]: filtered
+                                  };
+                                });
+                              }}
+                            />
+                          );
+                        }
+                      }
+                    ]}
+                  />
+                  <div className="my-4" />
+                </>
+              )}
+
+              {/* EXPENSES TABLE */}
+              {expenses.length > 0 && (
+                <>
+                  <h4 className="text-md font-medium mb-2">Expenses</h4>
+                  <Table
+                    data={expenses}
+                    columns={[
+                      {
+                        header: "Date",
+                        accessorKey: "date",
+                        cell: ({ getValue }) => formatDate(getValue())
+                      },
+                      {
+                        header: "Type",
+                        accessorKey: "expenseType",
+                        cell: ({ row }) => row.original.expenseType || 'N/A'
+                      },
+                      {
+                        header: "Amount",
+                        accessorKey: "amount",
+                        cell: ({ row }) => {
+                          const amt = row.original.amount || 0;
+                          const cur = row.original.currency || 'USD';
+                          return `${amt.toFixed(2)} ${cur}`;
+                        }
+                      },
+                      {
+                        header: "Select",
+                        id: "selectExpense",
+                        cell: ({ row }) => {
+                          const exp = row.original;
+                          const isChecked = selectedExpenses[projectId]?.some(i => i.id === exp.id && i.selected);
+                          return (
+                            <input
+                              type="checkbox"
+                              checked={!!isChecked}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setSelectedExpenses((prev) => {
+                                  const oldArr = prev[projectId] || [];
+                                  const filtered = oldArr.filter(i => i.id !== exp.id);
+                                  if (checked) {
+                                    filtered.push({ ...exp, selected: true });
+                                  }
+                                  return {
+                                    ...prev,
+                                    [projectId]: filtered
+                                  };
+                                });
+                              }}
+                            />
+                          );
+                        }
+                      }
+                    ]}
+                  />
+                </>
+              )}
+
+              {hours.length === 0 && expenses.length === 0 && (
+                <p className="text-gray-500">No unpaid items for this project.</p>
+              )}
+            </div>
+          </Card>
+        );
+      })}
+
+      <div className="mt-6 flex justify-end gap-2">
+        {/* Add Bonus button */}
+        <Button
+          variant="outline"
+          onClick={handleAddBonus}
+        >
+          Add Bonus
+        </Button>
+
+        {/* Process Payment button */}
+        <Button
+          onClick={handleProcessPayment}
+          disabled={calculateTotalAmount() <= 0}
+        >
+          Process Payment (${calculateTotalAmount().toLocaleString()})
+        </Button>
+      </div>
+
+      {/* The modal */}
+      <AddBonusModal
+        isOpen={bonusModalOpen}
+        onClose={() => setBonusModalOpen(false)}
+        worker={{
+          id: workerId,
+          name: workerData?.name || 'Unknown',
+        }}
+        adminUser={user}
+      />
+    </div>
+  );
+};
+
+export default WorkerPaymentDetailsPage;

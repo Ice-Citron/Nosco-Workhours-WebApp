@@ -1,3 +1,4 @@
+// src/pages/admin/PaymentProcessingPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminWorkHoursService } from '../../services/adminWorkHoursService';
@@ -6,35 +7,16 @@ import Tab from '../../components/common/Tab';
 import Card from '../../components/common/Card';
 import { Clock, DollarSign, Building } from 'lucide-react';
 import PaymentHistorySection from '../../components/admin/payments/PaymentHistorySection';
+import ProcessingPaymentsSection from '../../components/admin/payments/ProcessingPaymentsSection'; // If you have this
 
 const PaymentProcessingPage = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('unpaid');
+  const [activeTab, setActiveTab] = useState('toBePaid');
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (activeTab === 'unpaid') {
-      const loadWorkers = async () => {
-        try {
-          setLoading(true);
-          setError(null);
-          const data = await adminWorkHoursService.getUnpaidApprovedHours();
-          console.log('Fetched workers:', data);
-          setWorkers(data);
-        } catch (error) {
-          console.error('Error loading workers:', error);
-          setError('Failed to load unpaid hours');
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      loadWorkers();
-    }
-  }, [activeTab]);
-
+  // Table columns for "To Be Paid" tab
   const columns = [
     {
       header: "Worker",
@@ -54,37 +36,27 @@ const PaymentProcessingPage = () => {
       )
     },
     {
-      header: "Hours",
-      accessorKey: "unpaidHours",
-      cell: ({ row }) => {
-        const totalHours = Object.values(row.original.unpaidHours).reduce(
-          (acc, proj) => acc + proj.regularHours + proj.overtime15x + proj.overtime20x,
-          0
-        );
+      header: "Unpaid Hours",
+      accessorKey: "unpaidHoursCount",
+      cell: ({ getValue }) => {
+        const count = getValue();
         return (
           <div className="flex items-center">
             <Clock className="h-4 w-4 text-gray-500 mr-2" />
-            <span>{totalHours.toFixed(1)} hours</span>
+            <span>{count} hrs</span>
           </div>
         );
       }
     },
     {
       header: "Amount Due",
-      accessorKey: "unpaidHours",
-      cell: ({ row }) => {
-        const totalAmount = Object.values(row.original.unpaidHours).reduce(
-          (acc, proj) => 
-            acc + 
-            (proj.regularHours * row.original.rates.regular) +
-            (proj.overtime15x * row.original.rates.ot1_5) +
-            (proj.overtime20x * row.original.rates.ot2_0),
-          0
-        );
+      accessorKey: "unpaidAmount",
+      cell: ({ getValue }) => {
+        const amt = getValue() || 0;
         return (
           <div className="flex items-center">
             <DollarSign className="h-4 w-4 text-gray-500 mr-2" />
-            <span>${totalAmount.toLocaleString()}</span>
+            <span>${amt.toFixed(2)}</span>
           </div>
         );
       }
@@ -92,14 +64,38 @@ const PaymentProcessingPage = () => {
     {
       header: "Projects",
       accessorKey: "projects",
-      cell: ({ row }) => (
-        <div className="flex items-center">
-          <Building className="h-4 w-4 text-gray-500 mr-2" />
-          <span>{row.original.projects.length} projects</span>
-        </div>
-      )
+      cell: ({ row }) => {
+        const projectCount = row.original.projects ? row.original.projects.length : 0;
+        return (
+          <div className="flex items-center">
+            <Building className="h-4 w-4 text-gray-500 mr-2" />
+            <span>{projectCount} projects</span>
+          </div>
+        );
+      }
     }
   ];
+
+  // On mount or when tab changes, load data
+  useEffect(() => {
+    if (activeTab === 'toBePaid') {
+      (async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          // Now we call the new function
+          const data = await adminWorkHoursService.getAllWorkersWithUnpaidData();
+          // This includes workers with 0 hours
+          setWorkers(data);
+        } catch (err) {
+          console.error('Error loading worker data:', err);
+          setError('Failed to load workers');
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }
+  }, [activeTab]);
 
   return (
     <div className="p-6">
@@ -111,14 +107,20 @@ const PaymentProcessingPage = () => {
             </div>
             <div className="flex">
               <Tab
-                isActive={activeTab === 'unpaid'}
-                onClick={() => setActiveTab('unpaid')}
+                isActive={activeTab === 'toBePaid'}
+                onClick={() => setActiveTab('toBePaid')}
               >
-                Unpaid Hours
+                Payment
               </Tab>
               <Tab
-                isActive={activeTab === 'paid'}
-                onClick={() => setActiveTab('paid')}
+                isActive={activeTab === 'processing'}
+                onClick={() => setActiveTab('processing')}
+              >
+                Processing
+              </Tab>
+              <Tab
+                isActive={activeTab === 'history'}
+                onClick={() => setActiveTab('history')}
               >
                 Payment History
               </Tab>
@@ -127,7 +129,7 @@ const PaymentProcessingPage = () => {
         </div>
 
         <div className="p-4">
-          {activeTab === 'unpaid' ? (
+          {activeTab === 'toBePaid' && (
             <>
               {loading ? (
                 <div className="text-center py-8 text-gray-500">Loading...</div>
@@ -137,12 +139,23 @@ const PaymentProcessingPage = () => {
                 <Table
                   data={workers}
                   columns={columns}
-                  emptyMessage="No unpaid hours found"
-                  onRowClick={(worker) => navigate(`/admin/payments/worker/${worker.id}`)}
+                  emptyMessage="No workers found"
+                  // If you want row click to open something:
+                  onRowClick={(worker) => {
+                    // Perhaps open a "Select Items" or "Bonus" flow
+                    // Or navigate to a worker-specific page
+                    navigate(`/admin/payments/worker/${worker.id}`);
+                  }}
                 />
               )}
             </>
-          ) : (
+          )}
+
+          {activeTab === 'processing' && (
+            <ProcessingPaymentsSection />
+          )}
+
+          {activeTab === 'history' && (
             <PaymentHistorySection />
           )}
         </div>

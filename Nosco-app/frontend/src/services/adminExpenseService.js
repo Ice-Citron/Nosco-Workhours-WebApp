@@ -579,6 +579,55 @@ export const adminExpenseService = {
       throw error;
     }
   },
+
+  getWorkerUnpaidExpenses: async (workerId) => {
+    try {
+      const expenseRef = collection(db, 'expense');
+      const q = query(
+        expenseRef,
+        where('userID', '==', workerId),
+        where('status', '==', 'approved'),
+        where('paid', '==', false)
+      );
+      const snapshot = await getDocs(q);
+
+      const results = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        results.push({
+          id: docSnap.id,
+          ...data,
+          // parse date if needed
+          date: data.date?.toDate?.() || new Date(data.date),
+        });
+      });
+
+      return results;
+    } catch (error) {
+      console.error('Error fetching unpaid expenses:', error);
+      throw error;
+    }
+  },
+
+  markExpensesAsPaid: async (expenseIds, paymentDetails) => {
+    try {
+      const batch = writeBatch(db);
+      expenseIds.forEach((id) => {
+        const expRef = doc(db, 'expense', id);
+        batch.update(expRef, {
+          paid: true,
+          paymentDate: Timestamp.now(),
+          paymentReference: paymentDetails.reference,
+          paymentAmount: paymentDetails.amount,
+          updatedAt: Timestamp.now(),
+        });
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error('Error marking expenses as paid:', error);
+      throw error;
+    }
+  },
  };
  
  export default adminExpenseService;
