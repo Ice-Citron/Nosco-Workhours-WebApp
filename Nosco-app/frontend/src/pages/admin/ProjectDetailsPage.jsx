@@ -1,17 +1,25 @@
 // src/pages/admin/ProjectDetailsPage.jsx
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import Modal from '../../components/common/Modal';
+import InviteWorkerModal from '../../components/admin/projects/InviteWorkerModal';
 import { adminProjectService } from '../../services/adminProjectService';
 import { adminProjectInvitationService } from '../../services/adminProjectInvitationService';
-import InviteWorkerModal from '../../components/admin/projects/InviteWorkerModal';
-import InvitationTable from '../../components/admin/projects/InvitationTable';
-import Modal from '../../components/common/Modal';
+import { updateDoc, doc, Timestamp } from 'firebase/firestore';
+import { firestore } from '../../firebase/firebase_config';
 
 const ProjectDetailsPage = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
+
+  // Main project data and inline editing state
   const [project, setProject] = useState(null);
+  const [projectEdits, setProjectEdits] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+
+  // Other states
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -28,49 +36,107 @@ const ProjectDetailsPage = () => {
     try {
       setLoading(true);
       setError(null);
-      
       // Fetch project data
       const projectData = await adminProjectService.getProjectDetails(projectId);
       setProject(projectData);
-      
+
+      // Initialize the editable copy. For date fields, convert to YYYY-MM-DD
+      setProjectEdits({
+        ...projectData,
+        startDate: projectData.startDate
+          ? format(projectData.startDate.toDate(), 'yyyy-MM-dd')
+          : '',
+        endDate: projectData.endDate
+          ? format(projectData.endDate.toDate(), 'yyyy-MM-dd')
+          : ''
+      });
+
       // Fetch invitations
       const invitationsData = await adminProjectInvitationService.getProjectInvitations(projectId);
       setInvitations(invitationsData);
     } catch (err) {
       setError('Failed to load project data');
-      console.error('Error:', err);
+      console.error('Error fetching project data:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStatusChange = async () => {
+  // Inline editing functions
+  const enableEditMode = () => {
+    // Make a fresh copy of the current project with dates as strings
+    setProjectEdits({
+      ...project,
+      startDate: project.startDate
+        ? format(project.startDate.toDate(), 'yyyy-MM-dd')
+        : '',
+      endDate: project.endDate
+        ? format(project.endDate.toDate(), 'yyyy-MM-dd')
+        : ''
+    });
+    setEditMode(true);
+  };
+
+  const handleSaveEdits = async () => {
     try {
-      if (!statusAction) return;
-  
+      // Convert date strings back to Firestore Timestamps
+      const updatedData = {
+        ...projectEdits,
+        startDate: projectEdits.startDate
+          ? Timestamp.fromDate(new Date(projectEdits.startDate))
+          : null,
+        endDate: projectEdits.endDate
+          ? Timestamp.fromDate(new Date(projectEdits.endDate))
+          : null
+      };
+      await adminProjectService.updateProject(projectId, updatedData);
+      setProject(updatedData);
+      setEditMode(false);
+    } catch (err) {
+      console.error('Error saving project changes:', err);
+      setError('Failed to save project changes');
+    }
+  };
+
+  const handleCancelEdits = () => {
+    // Reset edits to original project data
+    setProjectEdits({
+      ...project,
+      startDate: project.startDate
+        ? format(project.startDate.toDate(), 'yyyy-MM-dd')
+        : '',
+      endDate: project.endDate
+        ? format(project.endDate.toDate(), 'yyyy-MM-dd')
+        : ''
+    });
+    setEditMode(false);
+  };
+
+  // Status change
+  const handleStatusChange = async () => {
+    if (!statusAction) return;
+    try {
       switch (statusAction) {
-        case 'end':
-          await adminProjectService.endProject(projectId);
+        case 'start':
+          await adminProjectService.updateProjectStatus(projectId, 'active');
           break;
         case 'archive':
           await adminProjectService.archiveProject(projectId);
           break;
+        case 'end':
+          await adminProjectService.endProject(projectId);
+          break;
         case 'unarchive':
           await adminProjectService.unarchiveProject(projectId);
-          break;
-        case 'start':
-          await adminProjectService.updateProjectStatus(projectId, 'active');
           break;
         default:
           break;
       }
-      
       await fetchProjectData();
-      setShowStatusModal(false);
       setStatusAction(null);
+      setShowStatusModal(false);
     } catch (err) {
       console.error('Error updating project status:', err);
-      // Consider adding a toast notification here
     }
   };
 
@@ -80,64 +146,21 @@ const ProjectDetailsPage = () => {
       navigate('/admin/projects');
     } catch (err) {
       console.error('Error deleting project:', err);
-      // Consider adding a toast notification here
     }
   };
 
-  const getStatusActions = () => {
-    switch (project?.status) {
-      case 'draft':
-        return [
-          { label: 'Start Project', action: 'start', color: 'bg-green-600' },
-          { label: 'Archive Project', action: 'archive', color: 'bg-gray-600' },
-        ];
+  const getStatusBadgeClass = (status) => {
+    switch (status) {
       case 'active':
-        return [
-          { label: 'End Project', action: 'end', color: 'bg-red-600' },
-          { label: 'Archive Project', action: 'archive', color: 'bg-gray-600' },
-        ];
-      case 'ended':
-        return [
-          { label: 'Archive Project', action: 'archive', color: 'bg-gray-600' },
-        ];
+        return 'bg-green-100 text-green-800';
+      case 'draft':
+        return 'bg-yellow-100 text-yellow-800';
       case 'archived':
-        return [
-          { label: 'Unarchive Project', action: 'unarchive', color: 'bg-green-600' },
-          { label: 'Delete Project', action: 'delete', color: 'bg-red-600' },
-        ];
+        return 'bg-gray-100 text-gray-800';
+      case 'ended':
+        return 'bg-red-100 text-red-800';
       default:
-        return [];
-    }
-  };
-
-  const handleCreateInvitation = async (userId, message) => {
-    try {
-      await adminProjectInvitationService.createInvitation(projectId, userId, message);
-      await fetchProjectData(); // Refresh the invitations list
-      setShowInviteModal(false);
-    } catch (err) {
-      console.error('Error creating invitation:', err);
-      // Consider adding error notification here
-    }
-  };
-  
-  const handleResendInvitation = async (invitationId) => {
-    try {
-      await adminProjectInvitationService.resendInvitation(invitationId);
-      await fetchProjectData(); // Refresh the invitations list
-    } catch (err) {
-      console.error('Error resending invitation:', err);
-      // Consider adding error notification here
-    }
-  };
-  
-  const handleCancelInvitation = async (invitationId, reason) => {
-    try {
-      await adminProjectInvitationService.cancelInvitation(invitationId, reason);
-      await fetchProjectData(); // Refresh the invitations list
-    } catch (err) {
-      console.error('Error cancelling invitation:', err);
-      // Consider adding error notification here
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -149,46 +172,256 @@ const ProjectDetailsPage = () => {
     );
   }
 
-  if (!project) {
+  if (error || !project) {
     return (
       <div className="p-6">
-        <div className="text-center text-red-600">Project not found</div>
+        <div className="text-center text-red-600">
+          {error || 'Project not found'}
+        </div>
       </div>
     );
   }
 
   return (
     <div className="p-6">
-      {/* Header Section */}
-      <div className="mb-6">
-        <button
-          onClick={() => navigate('/admin/projects')}
-          className="text-nosco-text hover:text-nosco-red mb-4 flex items-center"
+      {/* Back Button */}
+      <button
+        onClick={() => navigate('/admin/projects')}
+        className="flex items-center text-nosco-text hover:text-nosco-red mb-4"
+      >
+        <svg
+          className="w-4 h-4 mr-2"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
         >
-          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Projects
-        </button>
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+        Back to Projects
+      </button>
 
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-semibold">Project Details: {project.name}</h1>
-            <span className={`mt-2 inline-block px-3 py-1 rounded-full text-sm font-medium ${
-              project.status === 'active' 
-                ? 'bg-green-100 text-green-800'
-                : project.status === 'draft'
-                ? 'bg-yellow-100 text-yellow-800'
-                : project.status === 'archived'
-                ? 'bg-gray-100 text-gray-800'
-                : 'bg-red-100 text-red-800'
-            }`}>
-              {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
-            </span>
+      {/* Project Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          {editMode ? (
+            <input
+              type="text"
+              value={projectEdits.name}
+              onChange={(e) =>
+                setProjectEdits({ ...projectEdits, name: e.target.value })
+              }
+              className="text-2xl font-semibold p-2 border rounded shadow-sm w-full"
+            />
+          ) : (
+            <h1 className="text-2xl font-semibold">{project.name}</h1>
+          )}
+          <span
+            className={`mt-2 inline-block px-3 py-1 rounded-full text-sm font-medium ${getStatusBadgeClass(
+              project.status
+            )}`}
+          >
+            {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+          </span>
+        </div>
+
+        <div className="flex gap-2">
+          {/* If NOT in edit mode, and project is not ended/archived, show "Modify" + other status actions */}
+          {!editMode && project.status !== 'ended' && project.status !== 'archived' ? (
+            <>
+              <button
+                onClick={enableEditMode}
+                className="bg-nosco-red hover:bg-nosco-red-dark text-white px-4 py-2 rounded-md"
+              >
+                Modify
+              </button>
+              {project.status === 'draft' && (
+                <button
+                  onClick={() => {
+                    setStatusAction('start');
+                    setShowStatusModal(true);
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md"
+                >
+                  Start Project
+                </button>
+              )}
+              {(project.status === 'active' || project.status === 'draft') && (
+                <button
+                  onClick={() => {
+                    setStatusAction('archive');
+                    setShowStatusModal(true);
+                  }}
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md"
+                >
+                  Archive Project
+                </button>
+              )}
+              {project.status === 'active' && (
+                <button
+                  onClick={() => {
+                    setStatusAction('end');
+                    setShowStatusModal(true);
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md"
+                >
+                  End Project
+                </button>
+              )}
+            </>
+          ) : editMode ? (
+            // If in edit mode, show Save/Cancel
+            <>
+              <button
+                onClick={handleSaveEdits}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md"
+              >
+                Save
+              </button>
+              <button
+                onClick={handleCancelEdits}
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md"
+              >
+                Cancel
+              </button>
+            </>
+            ) : project.status === 'archived' ? (
+              // If project *is* archived, show "Unarchive" button
+              <button
+                onClick={() => { setStatusAction('unarchive'); setShowStatusModal(true); }}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+              >
+                  Unarchive Project
+              </button>
+            ) : null}
+        </div>
+      </div>
+
+      {/* Project Details Grid */}
+      <div className="mt-4 grid grid-cols-2 gap-6">
+        {/* Customer */}
+        <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
+          <h3 className="text-sm font-medium text-gray-500">Customer</h3>
+          {editMode ? (
+            <input
+              type="text"
+              value={projectEdits.customer || ''}
+              onChange={(e) =>
+                setProjectEdits({ ...projectEdits, customer: e.target.value })
+              }
+              className="mt-1 block w-full p-2 border rounded"
+            />
+          ) : (
+            <p className="mt-1 text-lg">{project.customer}</p>
+          )}
+        </div>
+
+        {/* Location */}
+        <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
+          <h3 className="text-sm font-medium text-gray-500">Location</h3>
+          {editMode ? (
+            <input
+              type="text"
+              value={projectEdits.location || ''}
+              onChange={(e) =>
+                setProjectEdits({ ...projectEdits, location: e.target.value })
+              }
+              className="mt-1 block w-full p-2 border rounded"
+            />
+          ) : (
+            <p className="mt-1 text-lg">{project.location}</p>
+          )}
+        </div>
+
+        {/* Department */}
+        <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
+          <h3 className="text-sm font-medium text-gray-500">Department</h3>
+          {editMode ? (
+            <input
+              type="text"
+              value={projectEdits.department || ''}
+              onChange={(e) =>
+                setProjectEdits({ ...projectEdits, department: e.target.value })
+              }
+              className="mt-1 block w-full p-2 border rounded"
+            />
+          ) : (
+            <p className="mt-1 text-lg">{project.department}</p>
+          )}
+        </div>
+
+        {/* Project Duration */}
+        <div className="bg-gray-50 p-4 rounded-lg shadow-sm">
+          <h3 className="text-sm font-medium text-gray-500">Project Duration</h3>
+          {editMode ? (
+            <div className="flex flex-col space-y-2">
+              <div>
+                <label className="text-xs text-gray-500">Start Date</label>
+                <input
+                  type="date"
+                  value={projectEdits.startDate || ''}
+                  onChange={(e) =>
+                    setProjectEdits({ ...projectEdits, startDate: e.target.value })
+                  }
+                  className="mt-1 block w-full p-2 border rounded"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">End Date</label>
+                <input
+                  type="date"
+                  value={projectEdits.endDate || ''}
+                  onChange={(e) =>
+                    setProjectEdits({ ...projectEdits, endDate: e.target.value })
+                  }
+                  className="mt-1 block w-full p-2 border rounded"
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="mt-1">
+              {format(project.startDate.toDate(), 'MMM d, yyyy')} -{' '}
+              {format(project.endDate.toDate(), 'MMM d, yyyy')}
+            </p>
+          )}
+        </div>
+
+        {/* Description */}
+        {project.description !== undefined && (
+          <div className="bg-gray-50 p-4 rounded-lg shadow-sm col-span-2">
+            <h3 className="text-sm font-medium text-gray-500">Description</h3>
+            {editMode ? (
+              <textarea
+                value={projectEdits.description || ''}
+                onChange={(e) =>
+                  setProjectEdits({
+                    ...projectEdits,
+                    description: e.target.value
+                  })
+                }
+                className="mt-1 block w-full p-2 border rounded"
+                rows={4}
+              />
+            ) : (
+              <p className="mt-1 whitespace-pre-wrap">{project.description}</p>
+            )}
           </div>
-          
-          <div className="flex gap-2">
-            {project.status !== 'archived' && project.status !== 'ended' && (
+        )}
+      </div>
+
+      {/* Project Invitations Section */}
+      {project.status !== 'archived' && (
+        <div className="mt-8 bg-white p-6 rounded-md shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Project Invitations</h2>
+
+            {/* Hide "Invite Worker" if ended or archived */}
+            {project.status !== 'ended' && project.status !== 'archived' && (
               <button
                 onClick={() => setShowInviteModal(true)}
                 className="bg-nosco-red hover:bg-nosco-red-dark text-white px-4 py-2 rounded-md transition-colors duration-200"
@@ -196,139 +429,63 @@ const ProjectDetailsPage = () => {
                 Invite Worker
               </button>
             )}
-            
-            <div className="relative">
-              <button
-                onClick={() => setShowStatusModal(true)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md transition-colors duration-200"
-              >
-                Actions
-              </button>
-            </div>
           </div>
-        </div>
-
-        {/* Project Details Grid */}
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-gray-500">Customer</h3>
-            <p className="mt-1 text-lg">{project.customer}</p>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                  >
+                    Worker
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                  >
+                    Status
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                  >
+                    Invited On
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {invitations.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={3}
+                      className="px-6 py-4 text-center text-sm text-gray-500"
+                    >
+                      No invitations found.
+                    </td>
+                  </tr>
+                ) : (
+                  invitations.map((inv) => (
+                    <tr key={inv.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {inv.user?.name || 'Unknown'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {inv.status}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {inv.createdAt && inv.createdAt.toDate
+                          ? format(inv.createdAt.toDate(), 'MMM d, yyyy')
+                          : '-'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-gray-500">Location</h3>
-            <p className="mt-1 text-lg">{project.location}</p>
-          </div>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-gray-500">Department</h3>
-            <p className="mt-1 text-lg">{project.department}</p>
-          </div>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-gray-500">Project Duration</h3>
-            <p className="mt-1">
-              {format(project.startDate.toDate(), 'MMM d, yyyy')} - {format(project.endDate.toDate(), 'MMM d, yyyy')}
-            </p>
-          </div>
-          {project.description && (
-            <div className="bg-gray-50 p-4 rounded-lg col-span-2">
-              <h3 className="text-sm font-medium text-gray-500">Description</h3>
-              <p className="mt-1 whitespace-pre-wrap">{project.description}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Invitations Section */}
-      {project.status !== 'archived' && (
-        <div className="mt-8">
-          <h2 className="text-xl font-semibold mb-4">Project Invitations</h2>
-          <InvitationTable 
-            invitations={invitations}
-            onResend={handleResendInvitation}
-            onCancel={handleCancelInvitation}
-            projectStatus={project.status}
-          />
         </div>
       )}
-
-      {/* Modals */}
-      {showInviteModal && (
-        <InviteWorkerModal
-          isOpen={showInviteModal}
-          onClose={() => setShowInviteModal(false)}
-          onInvite={handleCreateInvitation}
-          existingWorkers={project.workers ? Object.keys(project.workers) : []}
-        />
-      )}
-
-      {/* Status Change Modal */}
-      <Modal
-        isOpen={showStatusModal}
-        onClose={() => {
-          setShowStatusModal(false);
-          setStatusAction(null);
-        }}
-        title="Project Actions"
-      >
-        <div className="p-6">
-          <div className="space-y-4">
-            {getStatusActions().map((action) => (
-              <button
-                key={action.action}
-                onClick={() => {
-                  setStatusAction(action.action);
-                  setShowStatusModal(false);
-                  if (action.action === 'delete') {
-                    setShowDeleteModal(true);
-                  } else {
-                    setShowStatusModal(true);
-                  }
-                }}
-                className={`w-full px-4 py-2 ${action.color} text-white rounded-md hover:opacity-90`}
-              >
-                {action.label}
-              </button>
-            ))}
-            {project.status === 'archived' && (
-              <button
-                onClick={() => {
-                  setShowStatusModal(false);
-                  setShowDeleteModal(true);
-                }}
-                className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:opacity-90"
-              >
-                Delete Project
-              </button>
-            )}
-          </div>
-        </div>
-      </Modal>
-
-      {/* Delete Confirmation Modal */}
-      <Modal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        title="Delete Project"
-      >
-        <div className="p-6">
-          <p className="mb-4 text-gray-700">
-            Are you sure you want to delete this project? This action cannot be undone.
-          </p>
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={() => setShowDeleteModal(false)}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleDeleteProject}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-            >
-              Delete Project
-            </button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Status Change Confirmation Modal */}
       <Modal
@@ -337,7 +494,11 @@ const ProjectDetailsPage = () => {
           setShowStatusModal(false);
           setStatusAction(null);
         }}
-        title={`Confirm ${statusAction?.charAt(0).toUpperCase()}${statusAction?.slice(1)} Project`}
+        title={`Confirm ${
+          statusAction
+            ? statusAction.charAt(0).toUpperCase() + statusAction.slice(1)
+            : ''
+        } Project`}
       >
         <div className="p-6">
           <p className="mb-4 text-gray-700">
@@ -356,7 +517,7 @@ const ProjectDetailsPage = () => {
             <button
               onClick={handleStatusChange}
               className={`px-4 py-2 text-white rounded-md ${
-                statusAction === 'end' 
+                statusAction === 'end'
                   ? 'bg-red-600 hover:bg-red-700'
                   : statusAction === 'archive'
                   ? 'bg-gray-600 hover:bg-gray-700'
@@ -364,6 +525,56 @@ const ProjectDetailsPage = () => {
               }`}
             >
               Confirm
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Invite Worker Modal */}
+      {showInviteModal && (
+        <InviteWorkerModal
+          isOpen={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          onInvite={async (userId, message) => {
+            try {
+              await adminProjectInvitationService.createInvitation(
+                projectId,
+                userId,
+                message
+              );
+              await fetchProjectData();
+              setShowInviteModal(false);
+            } catch (err) {
+              console.error('Error inviting worker:', err);
+            }
+          }}
+          existingWorkers={project.workers ? Object.keys(project.workers) : []}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="Delete Project"
+      >
+        <div className="p-6">
+          <p className="mb-4 text-gray-700">
+            Are you sure you want to delete this project? This action cannot be
+            undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setShowDeleteModal(false)}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeleteProject}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+            >
+              Delete Project
             </button>
           </div>
         </div>

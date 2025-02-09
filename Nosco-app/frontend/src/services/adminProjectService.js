@@ -48,7 +48,7 @@ export const adminProjectService = {
     try {
       const newProject = {
         ...projectData,
-        status: 'active',
+        status: 'draft',
         createdAt: Timestamp.now(),
         startDate: Timestamp.fromDate(new Date(projectData.startDate)),
         endDate: Timestamp.fromDate(new Date(projectData.endDate))

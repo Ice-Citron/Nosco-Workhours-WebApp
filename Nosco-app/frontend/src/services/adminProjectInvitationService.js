@@ -1,24 +1,25 @@
 // src/services/adminProjectInvitationService.js
+
 import { firestore } from '../firebase/firebase_config';
-import { 
-  collection, 
-  query, 
-  where, 
-  orderBy, 
-  getDocs, 
-  getDoc, 
-  doc, 
-  addDoc, 
-  updateDoc, 
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  getDoc,
+  doc,
+  addDoc,
+  updateDoc,
   deleteDoc,
-  serverTimestamp, 
+  serverTimestamp,
   arrayUnion,
-  Timestamp 
+  Timestamp,
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 export const adminProjectInvitationService = {
-  // Get all invitations for a project
+  // 1) Get all invitations for a project
   getProjectInvitations: async (projectId) => {
     try {
       console.log('Fetching invitations for project:', projectId);
@@ -32,10 +33,10 @@ export const adminProjectInvitationService = {
       
       const snapshot = await getDocs(q);
       
-      // Get all unique user IDs
-      const userIds = new Set(snapshot.docs.map(doc => doc.data().userID));
+      // Collect userIDs found in invitations
+      const userIds = new Set(snapshot.docs.map((doc) => doc.data().userID));
       
-      // Fetch all user details in parallel
+      // Fetch user details in parallel
       const usersMap = new Map();
       await Promise.all(
         Array.from(userIds).map(async (userId) => {
@@ -43,17 +44,17 @@ export const adminProjectInvitationService = {
           if (userDoc.exists()) {
             usersMap.set(userId, {
               id: userId,
-              ...userDoc.data()
+              ...userDoc.data(),
             });
           }
         })
       );
       
       // Map invitations with user details
-      const invitationsWithUsers = snapshot.docs.map(doc => {
+      const invitationsWithUsers = snapshot.docs.map((docSnap) => {
         const invitation = {
-          id: doc.id,
-          ...doc.data()
+          id: docSnap.id,
+          ...docSnap.data(),
         };
         invitation.user = usersMap.get(invitation.userID) || null;
         return invitation;
@@ -66,64 +67,88 @@ export const adminProjectInvitationService = {
     }
   },
 
-  // Create new invitation
+  // 2) Create a new invitation
   createInvitation: async (projectId, userId, message) => {
     try {
-      // First verify if user exists
+      console.log('[createInvitation] START');
+      console.log('[createInvitation] projectId:', projectId);
+      console.log('[createInvitation] userId:', userId);
+      console.log('[createInvitation] message:', message);
+
+      // 1) Load the user doc
       const userRef = doc(firestore, 'users', userId);
       const userDoc = await getDoc(userRef);
-      
+
+      console.log('[createInvitation] userDoc exists?', userDoc.exists());
       if (!userDoc.exists()) {
+        console.log('[createInvitation] ERROR - userDoc not found in /users/' + userId);
         throw new Error('User not found');
       }
+      // For debugging, check the role or entire data
+      const userData = userDoc.data();
+      console.log('[createInvitation] userDoc data:', userData);
 
-      // Create invitation document
+      // 2) Build the invitation data
       const invitation = {
         projectID: projectId,
         userID: userId,
-        status: 'pending',
+        status: 'pending', // or 'invited'
         message,
-        createdAt: serverTimestamp(),
+        createdAt: serverTimestamp(), // top-level serverTimestamp is allowed
         updatedAt: serverTimestamp(),
-        attempts: [{
-          date: serverTimestamp(),
-          by: getAuth().currentUser.uid,
-          type: 'initial'
-        }],
+        attempts: [
+          {
+            // Inside arrays, use Timestamp.now() instead of serverTimestamp() to avoid the Firestore error
+            date: Timestamp.now(),
+            by: getAuth().currentUser?.uid || 'unknownAdmin',
+            type: 'initial',
+          },
+        ],
         requiredResponseDate: Timestamp.fromDate(
-          new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
-        )
+          new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        ),
       };
 
-      const docRef = await addDoc(collection(firestore, 'projectInvitations'), invitation);
+      console.log('[createInvitation] invitation to add:', invitation);
 
-      // Create notification
+      // 3) Write to Firestore
+      const projectInvitationsRef = collection(firestore, 'projectInvitations');
+      console.log('[createInvitation] about to addDoc(...)');
+      const docRef = await addDoc(projectInvitationsRef, invitation);
+      console.log('[createInvitation] docRef.id:', docRef.id);
+
+      // 4) Create notification doc
       const notification = {
         type: 'project_invitation',
         title: 'New Project Invitation',
-        message: `You have been invited to join a new project`,
+        message: 'You have been invited to join a new project',
         entityID: docRef.id,
         entityType: 'project_invitation',
         userID: userId,
         createdAt: serverTimestamp(),
         read: false,
-        link: '/worker/project-invitations'
+        link: '/worker/project-invitations',
       };
 
-      await addDoc(collection(firestore, 'notifications'), notification);
+      console.log('[createInvitation] notification to add:', notification);
 
+      const notificationsRef = collection(firestore, 'notifications');
+      const notificationDoc = await addDoc(notificationsRef, notification);
+      console.log('[createInvitation] notificationDoc.id:', notificationDoc.id);
+
+      console.log('[createInvitation] SUCCESS - returning invitation data');
       return {
         id: docRef.id,
         ...invitation,
-        user: userDoc.data()
+        user: userData,
       };
     } catch (error) {
-      console.error('Error creating invitation:', error);
+      console.error('[createInvitation] ERROR creating invitation:', error);
       throw error;
     }
   },
 
-  // Resend invitation
+  // 3) Resend invitation
   resendInvitation: async (invitationId) => {
     try {
       const invitationRef = doc(firestore, 'projectInvitations', invitationId);
@@ -132,27 +157,25 @@ export const adminProjectInvitationService = {
       if (!invitationSnap.exists()) {
         throw new Error('Invitation not found');
       }
-
       const invitation = invitationSnap.data();
-      
       if (invitation.status !== 'pending') {
         throw new Error('Can only resend pending invitations');
       }
 
-      // Update invitation
+      // Update doc with a "resend" attempt
       await updateDoc(invitationRef, {
         updatedAt: serverTimestamp(),
         attempts: arrayUnion({
           date: serverTimestamp(),
           by: getAuth().currentUser.uid,
-          type: 'resend'
+          type: 'resend',
         }),
         requiredResponseDate: Timestamp.fromDate(
           new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        )
+        ),
       });
 
-      // Create notification
+      // Create a “reminder” notification
       const notification = {
         type: 'project_invitation_reminder',
         title: 'Project Invitation Reminder',
@@ -162,9 +185,8 @@ export const adminProjectInvitationService = {
         userID: invitation.userID,
         createdAt: serverTimestamp(),
         read: false,
-        link: '/worker/project-invitations'
+        link: '/worker/project-invitations',
       };
-
       await addDoc(collection(firestore, 'notifications'), notification);
 
       return true;
@@ -174,32 +196,29 @@ export const adminProjectInvitationService = {
     }
   },
 
-  // Send nudge/reminder
+  // 4) Send nudge/reminder
   sendNudge: async (invitationId) => {
     try {
       const invitationRef = doc(firestore, 'projectInvitations', invitationId);
       const invitationSnap = await getDoc(invitationRef);
-      
       if (!invitationSnap.exists()) {
         throw new Error('Invitation not found');
       }
-
       const invitation = invitationSnap.data();
-      
       if (invitation.status !== 'pending') {
-        throw new Error('Can only send nudge for pending invitations');
+        throw new Error('Can only nudge pending invitations');
       }
 
-      // Update invitation with nudge attempt
+      // Update doc with a "nudge" attempt
       await updateDoc(invitationRef, {
         attempts: arrayUnion({
           date: serverTimestamp(),
           by: getAuth().currentUser.uid,
-          type: 'nudge'
-        })
+          type: 'nudge',
+        }),
       });
 
-      // Create notification
+      // Create “nudge” notification
       const notification = {
         type: 'project_invitation_nudge',
         title: 'Action Required: Project Invitation',
@@ -209,9 +228,8 @@ export const adminProjectInvitationService = {
         userID: invitation.userID,
         createdAt: serverTimestamp(),
         read: false,
-        link: '/worker/project-invitations'
+        link: '/worker/project-invitations',
       };
-
       await addDoc(collection(firestore, 'notifications'), notification);
 
       return true;
@@ -221,7 +239,7 @@ export const adminProjectInvitationService = {
     }
   },
 
-  // Cancel invitation
+  // 5) Cancel invitation
   cancelInvitation: async (invitationId, reason) => {
     try {
       const invitationRef = doc(firestore, 'projectInvitations', invitationId);
@@ -230,14 +248,12 @@ export const adminProjectInvitationService = {
       if (!invitationSnap.exists()) {
         throw new Error('Invitation not found');
       }
-
       const invitation = invitationSnap.data();
-      
       if (invitation.status !== 'pending') {
         throw new Error('Can only cancel pending invitations');
       }
 
-      // Update invitation
+      // Update doc
       await updateDoc(invitationRef, {
         status: 'cancelled',
         cancelReason: reason,
@@ -246,11 +262,11 @@ export const adminProjectInvitationService = {
         attempts: arrayUnion({
           date: serverTimestamp(),
           by: getAuth().currentUser.uid,
-          type: 'cancel'
-        })
+          type: 'cancel',
+        }),
       });
 
-      // Create notification
+      // Create “cancelled” notification
       const notification = {
         type: 'project_invitation_cancelled',
         title: 'Project Invitation Cancelled',
@@ -260,9 +276,8 @@ export const adminProjectInvitationService = {
         userID: invitation.userID,
         createdAt: serverTimestamp(),
         read: false,
-        link: '/worker/project-invitations'
+        link: '/worker/project-invitations',
       };
-
       await addDoc(collection(firestore, 'notifications'), notification);
 
       return true;
@@ -272,7 +287,7 @@ export const adminProjectInvitationService = {
     }
   },
 
-  // Delete invitation (admin only, no notification since it's removed)
+  // 6) Delete invitation (admin only, no extra notification)
   deleteInvitation: async (invitationId) => {
     try {
       const invitationRef = doc(firestore, 'projectInvitations', invitationId);
@@ -282,7 +297,7 @@ export const adminProjectInvitationService = {
       console.error('Error deleting invitation:', error);
       throw error;
     }
-  }
+  },
 };
 
 export default adminProjectInvitationService;

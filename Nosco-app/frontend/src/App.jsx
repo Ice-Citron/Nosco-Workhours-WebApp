@@ -33,7 +33,6 @@ import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import WorkerManagementPage from './pages/admin/WorkerManagementPage';
 import ProjectManagementPage from './pages/admin/ProjectManagementPage';
 import PaymentProcessingPage from './pages/admin/PaymentProcessingPage';
-import AdminProjectInvitationsPage from './pages/admin/AdminProjectInvitationsPage';
 import WorkHoursApprovalPage from './pages/admin/WorkHoursApprovalPage';
 
 import ApprovalsLayout from './components/admin/approvals/ApprovalsLayout';
@@ -112,7 +111,6 @@ const AuthenticatedApp = () => {
           <Route path="/admin/payments" element={<ProtectedRoute><PaymentProcessingPage /></ProtectedRoute>} />
           <Route path="/admin/payments/worker/:workerId" element={<ProtectedRoute><WorkerPaymentDetailsPage /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
-          <Route path="/admin/project-invitations" element={<ProtectedRoute><AdminProjectInvitationsPage /></ProtectedRoute>} />
 
           <Route path="/admin/notifications" element={<ProtectedRoute><AdminNotificationsPage /></ProtectedRoute>} />
           <Route path="/admin/analytics" element={<ProtectedRoute><AdminAnalyticsPage /></ProtectedRoute>} />
