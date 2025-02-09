@@ -114,5 +114,23 @@ export const expenseService = {
     } catch (error) {
       throw new Error(error.message);
     }
-  }
+  },
+
+  getExpensesForWorker: async (workerId) => {
+    try {
+      const q = query(
+        collection(firestore, 'expense'),
+        where('userID', '==', workerId),
+        orderBy('date', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().date?.toDate() || new Date(doc.data().date)
+      }));
+    } catch (error) {
+      throw new Error(error.message);
+    }
+  },
 };

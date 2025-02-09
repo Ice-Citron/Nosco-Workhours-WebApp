@@ -1,18 +1,26 @@
 // src/pages/admin/WorkerDetailsPage.jsx
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom'; // Added useNavigate here
+import { ArrowLeft } from 'lucide-react'; // Import the ArrowLeft icon
 import { adminUserService } from '../../services/adminUserService';
 import {
   getExchangeRatesSettings,
   convertBetweenCurrencies
 } from '../../services/adminSettingsService';
 
+import Card from '../../components/common/Card';
+import Table from '../../components/common/Table';
+import Button from '../../components/common/Button';
+
 import { adminPaymentService } from '../../services/adminPaymentService';
 import { expenseService } from '../../services/expenseService';
+import { adminExpenseService } from '../../services/adminExpenseService';
 
 import WorkerPaymentHistoryTab from '../../components/admin/workers/WorkerPaymentHistoryTab';
 import WorkerExpenseHistoryTab from '../../components/admin/workers/WorkerExpenseHistoryTab';
 
+import { updateDoc, doc } from 'firebase/firestore';
+import { firestore } from '../../firebase/firebase_config';
 
 
 // Simple Tab component
@@ -40,6 +48,7 @@ function Tab({ tabs, activeTab, onChange }) {
 
 export default function WorkerDetailsPage() {
   const { workerId } = useParams();
+  const navigate = useNavigate(); // Initialize navigate
 
   // Worker data
   const [worker, setWorker] = useState(null);
@@ -64,6 +73,9 @@ export default function WorkerDetailsPage() {
 
   const [expenses, setExpenses] = useState([]);
   const [loadingExpenses, setLoadingExpenses] = useState(false);
+
+  // Add this near the top of your component function (WorkerDetailsPage)
+  const [currentProjects, setCurrentProjects] = useState([]);
 
   // 1) Fetch worker details
   useEffect(() => {
@@ -138,6 +150,84 @@ export default function WorkerDetailsPage() {
       })();
     }
   }, [activeTab, worker]);
+
+  useEffect(() => {
+    const loadCurrentProjects = async () => {
+      try {
+        // Fetch all projects (assumes getProjects returns an array of { id, data } objects)
+        const projects = await adminExpenseService.getProjects();
+        console.log('All projects:', projects);
+        const now = new Date();
+  
+        // Loop through projects and update status to "ended" if the endDate is in the past
+        await Promise.all(
+          projects.map(async (proj, index) => {
+            // Use proj.data if it exists; otherwise, use proj itself
+            const data = proj.data || proj;
+            if (data.endDate && data.endDate.seconds) {
+              const endDate = new Date(data.endDate.seconds * 1000);
+              // If end date is in the past and the status is not "ended", update it
+              if (endDate < now && data.status !== 'ended') {
+                console.log(`Updating project ${proj.id} status to ended.`);
+                // Update the project document in Firestore
+                await updateDoc(doc(firestore, 'projects', proj.id), { status: 'ended' });
+                // Update our local data as well
+                data.status = 'ended';
+              }
+            }
+          })
+        );
+  
+        // Now filter projects for current ones:
+        const filtered = projects
+          .filter((proj, index) => {
+            const data = proj.data || proj;
+            if (!data) {
+              console.log(`Project at index ${index} has no data.`);
+              return false;
+            }
+            if (!data.status) {
+              console.log(`Project ${proj.id} is missing a status.`);
+              return false;
+            }
+            // Only include projects with status "active" or "draft" (not "ended")
+            if (!(data.status === 'active' || data.status === 'draft')) {
+              console.log(`Project ${proj.id} status (${data.status}) is not active or draft.`);
+              return false;
+            }
+            // Ensure the project has a workers object and that our workerId is in it
+            if (!data.workers) {
+              console.log(`Project ${proj.id} has no workers object.`);
+              return false;
+            }
+            if (!Object.keys(data.workers).includes(workerId)) {
+              console.log(`Project ${proj.id} does not include worker ${workerId}.`);
+              return false;
+            }
+            return true;
+          })
+          .map((proj) => {
+            const data = proj.data || proj;
+            return {
+              id: proj.id,
+              name: data.name || 'Unknown',
+              status: data.status || 'N/A',
+              startDate: data.startDate || null,
+              endDate: data.endDate || null,  // New: include the end date
+              worker_status: data.workers?.[workerId]?.status || 'N/A'
+            };
+          });
+  
+        console.log('Filtered current projects:', filtered);
+        setCurrentProjects(filtered);
+      } catch (error) {
+        console.error('Error loading current projects:', error);
+      }
+    };
+  
+    loadCurrentProjects();
+  }, [workerId]);   
+  
 
   // Toggle edit mode
   const handleEditToggle = () => setEditMode((prev) => !prev);
@@ -230,6 +320,15 @@ export default function WorkerDetailsPage() {
 
   return (
     <div className="p-6">
+      {/* Back Arrow Button */}
+      <button
+        onClick={() => navigate(-1)}
+        className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
+      >
+        <ArrowLeft className="h-5 w-5 mr-2" />
+        Go Back to Worker Management Table
+      </button>
+
       {/* Page Title */}
       <h1 className="text-2xl font-semibold mb-4">
         Worker Details: {name}
@@ -416,7 +515,7 @@ export default function WorkerDetailsPage() {
                             };
                             setWorker((prev) => ({
                               ...prev,
-                              bankAccounts: newArr
+                              bankAccounts: newArr,
                             }));
                           }}
                         />
@@ -438,7 +537,7 @@ export default function WorkerDetailsPage() {
                             };
                             setWorker((prev) => ({
                               ...prev,
-                              bankAccounts: newArr
+                              bankAccounts: newArr,
                             }));
                           }}
                         />
@@ -456,16 +555,60 @@ export default function WorkerDetailsPage() {
                             const newArr = [...bankAccounts];
                             newArr[idx] = {
                               ...newArr[idx],
-                              currency: e.target.value
+                              currency: e.target.value,
                             };
                             setWorker((prev) => ({
                               ...prev,
-                              bankAccounts: newArr
+                              bankAccounts: newArr,
                             }));
                           }}
                         />
                       ) : (
                         <span>{acct.currency}</span>
+                      )}
+                    </div>
+                    <div>
+                      <strong>Routing Number:</strong>{' '}
+                      {editMode ? (
+                        <input
+                          className="ml-1 border rounded p-1"
+                          value={acct.routingNumber || ''}
+                          onChange={(e) => {
+                            const newArr = [...bankAccounts];
+                            newArr[idx] = {
+                              ...newArr[idx],
+                              routingNumber: e.target.value,
+                            };
+                            setWorker((prev) => ({
+                              ...prev,
+                              bankAccounts: newArr,
+                            }));
+                          }}
+                        />
+                      ) : (
+                        <span>{acct.routingNumber}</span>
+                      )}
+                    </div>
+                    <div>
+                      <strong>SWIFT/BIC:</strong>{' '}
+                      {editMode ? (
+                        <input
+                          className="ml-1 border rounded p-1"
+                          value={acct.swiftBic || ''}
+                          onChange={(e) => {
+                            const newArr = [...bankAccounts];
+                            newArr[idx] = {
+                              ...newArr[idx],
+                              swiftBic: e.target.value,
+                            };
+                            setWorker((prev) => ({
+                              ...prev,
+                              bankAccounts: newArr,
+                            }));
+                          }}
+                        />
+                      ) : (
+                        <span>{acct.swiftBic}</span>
                       )}
                     </div>
                     <div>
@@ -482,7 +625,7 @@ export default function WorkerDetailsPage() {
                             };
                             setWorker((prev) => ({
                               ...prev,
-                              bankAccounts: newArr
+                              bankAccounts: newArr,
                             }));
                           }}
                         />
@@ -563,7 +706,49 @@ export default function WorkerDetailsPage() {
             </div>
           </div>
 
-          {/* Buttons row with extra spacing */}
+          <Card className="p-4 rounded shadow-lg mb-4">
+            <h2 className="text-xl font-semibold mb-4">Current Projects</h2>
+            {currentProjects.length === 0 ? (
+              <p className="text-gray-500">No active projects found for this worker.</p>
+            ) : (
+              <Table
+                data={currentProjects}
+                columns={[
+                  {
+                    header: "Project Name",
+                    accessorKey: "name"
+                  },
+                  {
+                    header: "Status",
+                    accessorKey: "status"
+                  },
+                  {
+                    header: "Worker Status",
+                    accessorKey: "worker_status"
+                  },
+                  {
+                    header: "Start Date",
+                    accessorKey: "startDate",
+                    cell: ({ getValue }) => {
+                      const d = getValue();
+                      return d && d.seconds ? new Date(d.seconds * 1000).toLocaleDateString() : 'N/A';
+                    }
+                  },
+                  {
+                    header: "End Date",
+                    accessorKey: "endDate",
+                    cell: ({ getValue }) => {
+                      const d = getValue();
+                      return d && d.seconds ? new Date(d.seconds * 1000).toLocaleDateString() : 'N/A';
+                    }
+                  }
+                ]}
+              />
+            )}
+          </Card>
+
+
+          {/* Buttons row */}
           <div className="flex gap-4 mt-6">
             {status === 'active' && (
               <button
@@ -581,7 +766,6 @@ export default function WorkerDetailsPage() {
                 Re-Activate
               </button>
             )}
-
             {!editMode && (
               <button
                 className="px-4 py-2 bg-blue-600 text-white rounded opacity-75"

@@ -38,6 +38,28 @@ export const adminUserService = {
     }
   },
 
+  // Fetch all admins
+  getAdmins: async () => {
+    try {
+      const q = query(
+        collection(firestore, 'users'),
+        where('role', '==', 'admin')
+      );
+      const querySnapshot = await getDocs(q);
+      const admins = [];
+      querySnapshot.forEach((docSnap) => {
+        admins.push({
+          id: docSnap.id,
+          ...docSnap.data()
+        });
+      });
+      return admins;
+    } catch (error) {
+      console.error('Error fetching admins:', error);
+      throw error;
+    }
+  },
+
   // Create new worker: also create them in Firebase Auth
   createWorker: async (workerData) => {
     try {
@@ -84,6 +106,43 @@ export const adminUserService = {
       throw error;
     }
   },
+
+  // Create new admin
+  createAdmin: async (adminData) => {
+    try {
+      // 1) Create the user in Firebase Auth using email + defaultPassword
+      const { email, defaultPassword } = adminData;
+      if (!email) throw new Error('Email is required');
+      if (!defaultPassword) throw new Error('A default password is required.');
+      const userCred = await createUserWithEmailAndPassword(auth, email, defaultPassword);
+      const newUid = userCred.user.uid;
+
+      // 2) Build the admin doc for Firestore
+      const newAdminDoc = {
+        name: adminData.name,
+        email: adminData.email,
+        department: adminData.department,
+        position: adminData.position,
+        role: 'admin',
+        status: 'active',
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        profilePic: '',
+        // Set default admin permissions if none are provided
+        permissions: adminData.permissions || ['approve_expenses', 'manage_payments', 'manage_users'],
+        phoneNumber: adminData.phoneNumber || ''
+      };
+
+      // 3) Write that doc to `users/{newUid}`
+      await setDoc(doc(firestore, 'users', newUid), newAdminDoc);
+
+      return { id: newUid, ...newAdminDoc };
+    } catch (error) {
+      console.error('Error creating admin:', error);
+      throw error;
+    }
+  },
+
 
   // Update worker status (active or archived)
   updateWorkerStatus: async (workerId, status) => {

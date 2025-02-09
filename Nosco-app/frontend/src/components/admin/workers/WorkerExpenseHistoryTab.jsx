@@ -1,7 +1,6 @@
 // src/components/admin/workers/WorkerExpenseHistoryTab.jsx
-
 import React, { useEffect, useState } from 'react';
-import adminExpenseService from '../../../services/adminExpenseService';
+import { expenseService } from '../../../services/expenseService';
 import Modal from '../../common/Modal';
 
 const WorkerExpenseHistoryTab = ({ workerId }) => {
@@ -22,8 +21,8 @@ const WorkerExpenseHistoryTab = ({ workerId }) => {
     const fetchWorkerExpenses = async () => {
       try {
         setLoading(true);
-        // Pass filters: { worker: workerId } => userID == worker
-        const data = await adminExpenseService.getExpenses({ worker: workerId });
+        // Use the new getExpensesForWorker function
+        const data = await expenseService.getExpensesForWorker(workerId);
         console.log('[WorkerExpenseHistoryTab] got expenses:', data);
         setExpenses(data);
         setError(null);
@@ -61,8 +60,6 @@ const WorkerExpenseHistoryTab = ({ workerId }) => {
   return (
     <div className="bg-white p-4 rounded shadow relative">
       <h2 className="text-xl font-semibold mb-2">Expense History</h2>
-
-      {/* Table listing worker's expenses */}
       <div className="overflow-x-auto">
         <table className="min-w-full">
           <thead>
@@ -86,14 +83,12 @@ const WorkerExpenseHistoryTab = ({ workerId }) => {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {expenses.map((exp) => {
-              // Example: parse date fields
               let displayDate = 'N/A';
               if (exp.date?.toDate) {
                 displayDate = exp.date.toDate().toLocaleDateString();
               } else if (exp.date instanceof Date) {
                 displayDate = exp.date.toLocaleDateString();
               }
-
               return (
                 <tr key={exp.id}>
                   <td className="py-3 px-3 text-sm text-gray-700 whitespace-nowrap">
@@ -163,16 +158,12 @@ const WorkerExpenseHistoryTab = ({ workerId }) => {
               <strong>Description:</strong>{' '}
               {selectedExpense.description || 'N/A'}
             </p>
-
-            {/* If it's rejected, show reason */}
             {selectedExpense.status === 'rejected' && (
               <p>
                 <strong>Rejection Reason:</strong>{' '}
                 {selectedExpense.rejectionReason || 'N/A'}
               </p>
             )}
-
-            {/* Receipts array */}
             {Array.isArray(selectedExpense.receipts) &&
               selectedExpense.receipts.length > 0 && (
                 <div>
@@ -193,23 +184,21 @@ const WorkerExpenseHistoryTab = ({ workerId }) => {
                   </ul>
                 </div>
             )}
-
-            {/* Maybe show adminComments, or isGeneralExpense, etc. */}
             {selectedExpense.adminComments && (
               <p>
                 <strong>Admin Comments:</strong> {selectedExpense.adminComments}
               </p>
             )}
-
             <p>
               <strong>Expense Category:</strong>{' '}
               {selectedExpense.isGeneralExpense ? 'Company / General' : 'Worker'}
             </p>
-
-            {/* last updated at? */}
             {selectedExpense.updatedAt?.toDate && (
               <p className="text-sm text-gray-500">
-                <em>Last updated: {selectedExpense.updatedAt.toDate().toLocaleString()}</em>
+                <em>
+                  Last updated:{' '}
+                  {selectedExpense.updatedAt.toDate().toLocaleString()}
+                </em>
               </p>
             )}
           </div>

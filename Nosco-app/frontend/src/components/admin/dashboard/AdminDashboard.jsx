@@ -11,7 +11,7 @@ const AdminDashboard = ({ metrics }) => {
 
   // Navigation Links for the top menu
   const navLinks = [
-    { title: "Workers", path: "/admin/workers" },
+    { title: "Users", path: "/admin/workers" },
     { title: "Projects", path: "/admin/projects" },
     { title: "Work Hours", path: "/admin/approvals/work-hours" },
     { title: "Expenses", path: "/admin/approvals/expenses" },

@@ -1,5 +1,4 @@
 // src/pages/admin/WorkerPaymentDetailsPage.jsx
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -17,24 +16,15 @@ import { ArrowLeft } from 'lucide-react';
 
 import AddBonusModal from '../../components/admin/payments/AddBonusModal'; 
 
-
 /**
  * Helper to calculate the cost of a single hour entry
  * using worker's baseRate and applying 1.5x or 2.0x for overtime.
  */
 function calculateHourCost(entry, compensation) {
-  // e.g. compensation = { baseRate: 21, currency: "USD", ... }
   const baseRate = compensation?.baseRate || 0;
-
-  // Regular = baseRate * regularHours
   const regularCost = (entry.regularHours || 0) * baseRate;
-
-  // OT 1.5x = baseRate * 1.5 * overtime15x
   const ot15Cost = (entry.overtime15x || 0) * (baseRate * 1.5);
-
-  // OT 2.0x = baseRate * 2.0 * overtime20x
   const ot20Cost = (entry.overtime20x || 0) * (baseRate * 2.0);
-
   return regularCost + ot15Cost + ot20Cost;
 }
 
@@ -45,19 +35,37 @@ const WorkerPaymentDetailsPage = () => {
 
   const [workerData, setWorkerData] = useState(null);
   const [projectMap, setProjectMap] = useState({});
-  // projectMap: { [projectId]: { hours: [...], expenses: [...] } }
+  // projectMap: { [projectId]: { name: string, hours: [...], expenses: [...] } }
   const [loading, setLoading] = useState(true);
   const [bonusModalOpen, setBonusModalOpen] = useState(false);
 
   // For selected items
   const [selectedHours, setSelectedHours] = useState({});
-  // shape: { projectId: [ { ...hourDoc, selected: true } ] }
   const [selectedExpenses, setSelectedExpenses] = useState({});
-  // shape: { projectId: [ { ...expenseDoc, selected: true } ] }
+
+  // NEW: State for project names mapping: { projectId: projectName }
+  const [projectNames, setProjectNames] = useState({});
 
   const handleAddBonus = () => {
     setBonusModalOpen(true);
   };
+
+  // Load project names from the projects collection
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const projects = await adminExpenseService.getProjects();
+        const mapping = {};
+        projects.forEach((proj) => {
+          mapping[proj.id] = proj.name;
+        });
+        setProjectNames(mapping);
+      } catch (error) {
+        console.error('Error loading projects:', error);
+      }
+    };
+    loadProjects();
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -73,32 +81,51 @@ const WorkerPaymentDetailsPage = () => {
         const workerDetails = workerSnap.data();
         setWorkerData(workerDetails);
 
-        // 2) Fetch all UNPAID hours for this worker
-        // returns an object keyed by project => { entries: [ ... ] }
+        // 2) Fetch all UNPAID work hours for this worker
         const hoursResult = await adminWorkHoursService.getWorkerUnpaidHours(workerId);
 
         // 3) Fetch all UNPAID expenses for this worker
-        // returns an array of expense docs
         const expensesResult = await adminExpenseService.getWorkerUnpaidExpenses(workerId);
 
-        // 4) Merge them into a single `projectMap`
+        // 4) Merge work hours and expenses into a single projectMap
         const map = {};
 
-        // a) incorporate hours
+        // a) Incorporate work hours
         Object.keys(hoursResult).forEach((pid) => {
           map[pid] = {
+            // Default name is the project ID; later we update using projectNames
+            name: projectNames[pid] || pid,
             hours: hoursResult[pid].entries || [],
             expenses: []
           };
         });
 
-        // b) incorporate expenses
+        // b) Incorporate expenses and update project name if available
         expensesResult.forEach((exp) => {
-          const pid = exp.projectID || '__GENERAL__'; // fallback if no projectID
+          const pid = exp.projectID || '__GENERAL__'; // Fallback if no projectID
+          // Determine the display name:
+          // If no projectID then it's "General Expenses"
+          // Otherwise, if expense object includes a project with a name, use it;
+          // else try the projectNames mapping; if not found, fallback to the id.
+          let displayName = pid === '__GENERAL__'
+            ? 'General Expenses'
+            : (exp.project && exp.project.name)
+            ? exp.project.name
+            : (projectNames[pid] || pid);
+          
           if (!map[pid]) {
-            map[pid] = { hours: [], expenses: [] };
+            map[pid] = {
+              name: displayName,
+              hours: [],
+              expenses: [exp]
+            };
+          } else {
+            // If the stored name is still the raw id, update it.
+            if (!map[pid].name || map[pid].name === pid) {
+              map[pid].name = displayName;
+            }
+            map[pid].expenses.push(exp);
           }
-          map[pid].expenses.push(exp);
         });
 
         setProjectMap(map);
@@ -110,7 +137,7 @@ const WorkerPaymentDetailsPage = () => {
     };
 
     loadData();
-  }, [workerId]);
+  }, [workerId, projectNames]); // re-run when projectNames update
 
   // Utility: format date
   const formatDate = (val) => {
@@ -127,7 +154,6 @@ const WorkerPaymentDetailsPage = () => {
     if (!workerData) return 0;
     const compensation = workerData.compensation || { baseRate: 0 };
     let total = 0;
-
     Object.values(selectedHours).forEach((arr) => {
       arr.forEach((entry) => {
         if (entry.selected) {
@@ -160,8 +186,8 @@ const WorkerPaymentDetailsPage = () => {
   const handleProcessPayment = async () => {
     const totalAmt = calculateTotalAmount();
     if (totalAmt <= 0) return;
-  
-    // 1) Gather selected hour IDs
+
+    // Gather selected hour IDs
     const selectedHourIds = [];
     Object.values(selectedHours).forEach((arr) => {
       arr.forEach((entry) => {
@@ -170,8 +196,8 @@ const WorkerPaymentDetailsPage = () => {
         }
       });
     });
-  
-    // 2) Gather selected expense IDs
+
+    // Gather selected expense IDs
     const selectedExpenseIds = [];
     Object.values(selectedExpenses).forEach((arr) => {
       arr.forEach((exp) => {
@@ -180,16 +206,12 @@ const WorkerPaymentDetailsPage = () => {
         }
       });
     });
-  
-    if (selectedHourIds.length === 0 && selectedExpenseIds.length === 0) {
-      return; // nothing selected
-    }
-  
-    // Create a unique reference for the payment
+
+    if (selectedHourIds.length === 0 && selectedExpenseIds.length === 0) return;
+
     const reference = `PAY-${Date.now()}`;
-  
+
     try {
-      // Mark work hours as paid
       if (selectedHourIds.length > 0) {
         await adminWorkHoursService.markHoursAsPaid(selectedHourIds, {
           reference,
@@ -198,8 +220,6 @@ const WorkerPaymentDetailsPage = () => {
           processedAt: new Date()
         });
       }
-  
-      // Mark expenses as paid
       if (selectedExpenseIds.length > 0) {
         await adminExpenseService.markExpensesAsPaid(selectedExpenseIds, {
           reference,
@@ -208,28 +228,26 @@ const WorkerPaymentDetailsPage = () => {
           processedAt: new Date()
         });
       }
-  
-      // Determine payment type based on what is selected:
+
       let paymentType;
       if (selectedExpenseIds.length > 0 && selectedHourIds.length > 0) {
-        paymentType = "combined"; // or choose a type that suits your business logic
+        paymentType = "combined";
       } else if (selectedExpenseIds.length > 0) {
         paymentType = "expenseReimbursement";
       } else if (selectedHourIds.length > 0) {
         paymentType = "salary";
       }
-  
-      // Build the payment data
+
       const paymentData = {
         description: "Payment for selected work hours and/or expenses",
         paymentType,
         userID: workerId,
         amount: totalAmt,
         currency: workerData.currency || "USD",
-        projectID: "", // Optionally, combine project IDs (if all items are for one project) or leave blank
+        projectID: "",
         date: new Date().toISOString(),
         referenceNumber: reference,
-        status: "processing", // New payment doc is created with processing status
+        status: "processing",
         createdBy: user.uid,
         comments: {
           text: "Payment created from worker payment details page",
@@ -237,30 +255,21 @@ const WorkerPaymentDetailsPage = () => {
           createdAt: new Date()
         }
       };
-  
-      // Add related IDs if available. (Here we store them as arrays.)
+
       if (selectedExpenseIds.length > 0) {
         paymentData.relatedExpenseIDs = selectedExpenseIds;
-        // Alternatively, if you want a singular field when only one exists:
-        // paymentData.relatedExpenseID = selectedExpenseIds.length === 1 ? selectedExpenseIds[0] : selectedExpenseIds;
       }
       if (selectedHourIds.length > 0) {
         paymentData.relatedWorkHoursIDs = selectedHourIds;
-        // Similarly for work hours:
-        // paymentData.relatedWorkHoursID = selectedHourIds.length === 1 ? selectedHourIds[0] : selectedHourIds;
       }
-  
-      // Create a new payment document with status = "processing"
+
       await adminPaymentService.createPayment(paymentData);
-  
-      // Navigate to the payments overview page (or show a success message)
       navigate('/admin/payments');
     } catch (error) {
       console.error('Error processing payment:', error);
     }
   };
 
-  // Render UI
   if (loading) {
     return (
       <div className="p-6">
@@ -309,7 +318,6 @@ const WorkerPaymentDetailsPage = () => {
         </div>
       </Card>
 
-      {/* If no projects */}
       {Object.keys(projectMap).length === 0 && (
         <Card className="mb-4">
           <div className="p-6">
@@ -318,15 +326,13 @@ const WorkerPaymentDetailsPage = () => {
         </Card>
       )}
 
-      {/* Render each project */}
       {Object.entries(projectMap).map(([projectId, data]) => {
         const { hours, expenses } = data;
-
         return (
           <Card key={projectId} className="mb-6">
             <div className="p-6">
               <h3 className="text-lg font-semibold mb-4">
-                Project: {projectId === '__GENERAL__' ? 'General Expenses' : projectId}
+                Project: {data.name}
               </h3>
 
               {/* HOURS TABLE */}
@@ -467,24 +473,14 @@ const WorkerPaymentDetailsPage = () => {
       })}
 
       <div className="mt-6 flex justify-end gap-2">
-        {/* Add Bonus button */}
-        <Button
-          variant="outline"
-          onClick={handleAddBonus}
-        >
+        <Button variant="outline" onClick={handleAddBonus}>
           Add Bonus
         </Button>
-
-        {/* Process Payment button */}
-        <Button
-          onClick={handleProcessPayment}
-          disabled={calculateTotalAmount() <= 0}
-        >
+        <Button onClick={handleProcessPayment} disabled={calculateTotalAmount() <= 0}>
           Process Payment (${calculateTotalAmount().toLocaleString()})
         </Button>
       </div>
 
-      {/* The modal */}
       <AddBonusModal
         isOpen={bonusModalOpen}
         onClose={() => setBonusModalOpen(false)}
