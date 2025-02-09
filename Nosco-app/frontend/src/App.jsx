@@ -6,7 +6,6 @@ import WorkerLayout from './components/layout/WorkerLayout';
 
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
-import RegistrationPage from './pages/RegistrationPage';
 import PasswordResetRequestPage from './pages/PasswordResetRequestPage';
 import ContactSupportPage from './pages/ContactSupportPage';
 import WorkerDashboardPage from './pages/WorkerDashboardPage';
@@ -65,7 +64,6 @@ const AuthenticatedApp = () => {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegistrationPage />} />
         <Route path="/password-reset" element={<PasswordResetRequestPage />} />
         <Route path="/contact-support" element={<ContactSupportPage />} />
         <Route path="/loading" element={<LoadingPage />} />

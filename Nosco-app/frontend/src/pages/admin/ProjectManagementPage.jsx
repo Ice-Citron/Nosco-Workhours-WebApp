@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import AddProjectForm from '../../components/admin/projects/AddProjectForm';
 import Table from '../../components/common/Table';
-import Tab from './../../components/admin/projects/ProjectsTab'; // Add this import
+import Tab from '../../components/admin/projects/ProjectsTab'; // or your Tab component
 import { adminProjectService } from '../../services/adminProjectService';
 import { useNavigate } from 'react-router-dom';
 
@@ -33,9 +33,7 @@ const ProjectManagementPage = () => {
     }
   };
 
-  const getFilteredProjects = () => {
-    return projects.filter(p => p.status === activeTab);
-  };
+  const getFilteredProjects = () => projects.filter(p => p.status === activeTab);
 
   const getTabs = () => {
     const counts = projects.reduce((acc, project) => {
@@ -69,7 +67,7 @@ const ProjectManagementPage = () => {
       accessorKey: 'customer'
     },
     {
-      header: 'COUNTRY',
+      header: 'LOCATION',
       accessorKey: 'location'
     },
     {
@@ -104,16 +102,9 @@ const ProjectManagementPage = () => {
     }
   ];
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-nosco-red"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-6">
+      {/* Header & Add Button */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold">Project Management</h1>
         <button
@@ -124,23 +115,22 @@ const ProjectManagementPage = () => {
         </button>
       </div>
 
+      {/* Tab Bar */}
       <div className="mb-6">
-        <Tab
-          tabs={getTabs()}
-          activeTab={activeTab}
-          onChange={setActiveTab}
-        />
+        <Tab tabs={getTabs()} activeTab={activeTab} onChange={setActiveTab} />
       </div>
 
+      {/* Projects Table */}
       <div className="bg-white rounded-lg shadow-sm">
         <Table
           data={getFilteredProjects()}
           columns={columns}
-          onRowClick={(row) => navigate(`/admin/projects/${row.id}/management`)}
           emptyMessage={`No ${activeTab} projects found`}
+          onRowClick={(row) => navigate(`/admin/projects/${row.id}/management`)}
         />
       </div>
 
+      {/* Add Project Modal */}
       {showAddModal && (
         <AddProjectForm
           isOpen={showAddModal}
