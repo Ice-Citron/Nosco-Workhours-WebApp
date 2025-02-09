@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Modal from '../../common/Modal';
 import { X, AlertCircle, CheckCircle, Clock, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -15,7 +16,15 @@ const ProcessPaymentModal = ({
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(false);
 
-  if (!payment || !isOpen) return null;
+  // Update local state if payment changes
+  useEffect(() => {
+    if (payment) {
+      setPaymentMethod(payment.paymentMethod || '');
+      setReferenceNumber(payment.referenceNumber || '');
+    }
+  }, [payment]);
+
+  if (!payment) return null;
 
   const formatDate = (date) => {
     if (!date) return '-';
@@ -27,7 +36,6 @@ const ProcessPaymentModal = ({
     }
   };
 
-  // Determine available next statuses based on current status
   const getAvailableStatuses = () => {
     switch (payment.status) {
       case 'pending':
@@ -39,7 +47,6 @@ const ProcessPaymentModal = ({
     }
   };
 
-  // Get required comment template based on status change
   const getCommentTemplate = (status) => {
     switch (status) {
       case 'processing':
@@ -92,24 +99,15 @@ const ProcessPaymentModal = ({
   };
 
   return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white rounded-lg max-w-2xl w-full m-4" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b border-gray-200">
+    <Modal isOpen={isOpen} onClose={onClose} title="Process Payment">
+      <div className="p-6">
+        <div className="flex justify-between items-center border-b pb-4 mb-4">
           <div className="flex items-center gap-3">
             {getStatusIcon(payment.status)}
             <h2 className="text-xl font-semibold">Process Payment</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
-            <X className="h-5 w-5" />
-          </button>
         </div>
-
-        {/* Content */}
-        <div className="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+        <div className="max-h-[calc(100vh-200px)] overflow-y-auto">
           {/* Payment Details */}
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div>
@@ -130,7 +128,7 @@ const ProcessPaymentModal = ({
               <p className="font-medium">
                 {payment.paymentType
                   .replace(/([A-Z])/g, ' $1')
-                  .replace(/^./, str => str.toUpperCase())
+                  .replace(/^./, (str) => str.toUpperCase())
                   .trim()}
               </p>
             </div>
@@ -143,7 +141,6 @@ const ProcessPaymentModal = ({
           {/* Processing Form */}
           {payment.status !== 'completed' && (
             <form onSubmit={handleStatusUpdate} className="space-y-4 border-t pt-4">
-              {/* Payment Method */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Payment Method
@@ -160,8 +157,6 @@ const ProcessPaymentModal = ({
                   <option value="cash">Cash</option>
                 </select>
               </div>
-
-              {/* Reference Number */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Reference Number
@@ -175,8 +170,6 @@ const ProcessPaymentModal = ({
                   placeholder="Enter reference number"
                 />
               </div>
-
-              {/* Status Update */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Update Status
@@ -188,15 +181,13 @@ const ProcessPaymentModal = ({
                   className="w-full p-2 border rounded-md focus:ring-1 focus:ring-blue-500"
                 >
                   <option value="">Select New Status</option>
-                  {getAvailableStatuses().map(status => (
+                  {getAvailableStatuses().map((status) => (
                     <option key={status} value={status}>
                       {status.charAt(0).toUpperCase() + status.slice(1)}
                     </option>
                   ))}
                 </select>
               </div>
-
-              {/* Comment */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Comment
@@ -210,7 +201,6 @@ const ProcessPaymentModal = ({
                   placeholder="Add processing details or notes..."
                 />
               </div>
-
               <button
                 type="submit"
                 disabled={loading || !newStatus || !comment.trim()}
@@ -221,24 +211,43 @@ const ProcessPaymentModal = ({
             </form>
           )}
 
-          {/* Comments History */}
+          {/* Processing History */}
           <div className="mt-6 border-t pt-4">
             <div className="flex items-center gap-2 mb-4">
               <MessageSquare className="h-5 w-5 text-gray-500" />
               <h3 className="text-lg font-medium">Processing History</h3>
             </div>
-
             <div className="space-y-4">
-              {payment.comments ? (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="font-medium">{payment.comments.userID}</span>
-                    <span className="text-sm text-gray-500">
-                      {formatDate(payment.comments.createdAt)}
-                    </span>
+              {payment.processingHistory && payment.processingHistory.length > 0 ? (
+                payment.processingHistory.map((entry, index) => (
+                  <div key={index} className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <span className="font-medium">{entry.adminId}</span>
+                        <span className={`ml-2 px-2 py-1 rounded-full text-xs ${
+                          entry.status === 'processing'
+                            ? 'bg-blue-100 text-blue-800'
+                            : entry.status === 'completed'
+                            ? 'bg-green-100 text-green-800'
+                            : entry.status === 'comment'
+                            ? 'bg-gray-100 text-gray-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {entry.status}
+                        </span>
+                      </div>
+                      <span className="text-sm text-gray-500">
+                        {formatDate(entry.timestamp)}
+                      </span>
+                    </div>
+                    <p className="text-gray-700">{entry.comment}</p>
+                    {entry.paymentMethod && (
+                      <p className="text-sm text-gray-500 mt-1">
+                        Method: {entry.paymentMethod}, Ref: {entry.referenceNumber}
+                      </p>
+                    )}
                   </div>
-                  <p className="text-gray-700">{payment.comments.text}</p>
-                </div>
+                ))
               ) : (
                 <p className="text-gray-500">No processing history yet</p>
               )}
@@ -246,76 +255,35 @@ const ProcessPaymentModal = ({
           </div>
 
           {/* Standalone Comment Section */}
-            {payment.status !== 'completed' && (
+          {payment.status !== 'completed' && (
             <div className="border-t pt-4 mt-4">
-                <h3 className="text-lg font-medium mb-4">Add Comment</h3>
-                <div className="space-y-4">
+              <h3 className="text-lg font-medium mb-4">Add Comment</h3>
+              <div className="space-y-4">
                 <textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    className="w-full p-2 border rounded-md focus:ring-1 focus:ring-blue-500"
-                    placeholder="Add a comment without changing status..."
-                    rows={3}
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  className="w-full p-2 border rounded-md focus:ring-1 focus:ring-blue-500"
+                  placeholder="Add a comment without changing status..."
+                  rows={3}
                 />
                 <button
-                    type="button"
-                    onClick={() => {
+                  type="button"
+                  onClick={() => {
                     if (comment.trim()) {
-                        onCommentAdd(payment.id, comment);
-                        setComment('');
+                      onCommentAdd(payment.id, comment);
+                      setComment('');
                     }
-                    }}
-                    className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
+                  }}
+                  className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
                 >
-                    Add Comment
+                  Add Comment
                 </button>
-                </div>
+              </div>
             </div>
-            )}
-
-            {/* Processing History Section - Update to include all history types */}
-            <div className="mt-6 border-t pt-4">
-            <div className="flex items-center gap-2 mb-4">
-                <MessageSquare className="h-5 w-5 text-gray-500" />
-                <h3 className="text-lg font-medium">Processing History</h3>
-            </div>
-
-            <div className="space-y-4">
-                {payment.processingHistory ? (
-                payment.processingHistory.map((entry, index) => (
-                    <div key={index} className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-2">
-                        <div>
-                        <span className="font-medium">{entry.adminId}</span>
-                        <span className={`ml-2 px-2 py-1 rounded-full text-xs ${
-                            entry.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                            entry.status === 'completed' ? 'bg-green-100 text-green-800' :
-                            entry.status === 'comment' ? 'bg-gray-100 text-gray-800' :
-                            'bg-yellow-100 text-yellow-800'
-                        }`}>
-                            {entry.status}
-                        </span>
-                        </div>
-                        <span className="text-sm text-gray-500">
-                        {formatDate(entry.timestamp)}
-                        </span>
-                    </div>
-                    <p className="text-gray-700">{entry.comment}</p>
-                    {entry.paymentMethod && (
-                        <p className="text-sm text-gray-500 mt-1">
-                        Method: {entry.paymentMethod}, Ref: {entry.referenceNumber}
-                        </p>
-                    )}
-                    </div>
-                ))
-                ) : (
-                <p className="text-gray-500">No processing history yet</p>
-                )}
-            </div>
-          </div>
+          )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

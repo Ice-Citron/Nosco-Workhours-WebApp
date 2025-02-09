@@ -5,6 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { adminWorkHoursService } from '../../services/adminWorkHoursService';
 import { adminExpenseService } from '../../services/adminExpenseService';
+import { adminPaymentService } from '../../services/adminPaymentService';
 import { useAuth } from '../../context/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from '../../firebase/firebase_config';
@@ -159,7 +160,7 @@ const WorkerPaymentDetailsPage = () => {
   const handleProcessPayment = async () => {
     const totalAmt = calculateTotalAmount();
     if (totalAmt <= 0) return;
-
+  
     // 1) Gather selected hour IDs
     const selectedHourIds = [];
     Object.values(selectedHours).forEach((arr) => {
@@ -169,7 +170,7 @@ const WorkerPaymentDetailsPage = () => {
         }
       });
     });
-
+  
     // 2) Gather selected expense IDs
     const selectedExpenseIds = [];
     Object.values(selectedExpenses).forEach((arr) => {
@@ -179,15 +180,16 @@ const WorkerPaymentDetailsPage = () => {
         }
       });
     });
-
+  
     if (selectedHourIds.length === 0 && selectedExpenseIds.length === 0) {
       return; // nothing selected
     }
-
+  
+    // Create a unique reference for the payment
     const reference = `PAY-${Date.now()}`;
-
+  
     try {
-      // Mark hours as paid
+      // Mark work hours as paid
       if (selectedHourIds.length > 0) {
         await adminWorkHoursService.markHoursAsPaid(selectedHourIds, {
           reference,
@@ -196,7 +198,7 @@ const WorkerPaymentDetailsPage = () => {
           processedAt: new Date()
         });
       }
-
+  
       // Mark expenses as paid
       if (selectedExpenseIds.length > 0) {
         await adminExpenseService.markExpensesAsPaid(selectedExpenseIds, {
@@ -206,8 +208,52 @@ const WorkerPaymentDetailsPage = () => {
           processedAt: new Date()
         });
       }
-
-      // Optionally create a Payment doc, or just navigate away
+  
+      // Determine payment type based on what is selected:
+      let paymentType;
+      if (selectedExpenseIds.length > 0 && selectedHourIds.length > 0) {
+        paymentType = "combined"; // or choose a type that suits your business logic
+      } else if (selectedExpenseIds.length > 0) {
+        paymentType = "expenseReimbursement";
+      } else if (selectedHourIds.length > 0) {
+        paymentType = "salary";
+      }
+  
+      // Build the payment data
+      const paymentData = {
+        description: "Payment for selected work hours and/or expenses",
+        paymentType,
+        userID: workerId,
+        amount: totalAmt,
+        currency: workerData.currency || "USD",
+        projectID: "", // Optionally, combine project IDs (if all items are for one project) or leave blank
+        date: new Date().toISOString(),
+        referenceNumber: reference,
+        status: "processing", // New payment doc is created with processing status
+        createdBy: user.uid,
+        comments: {
+          text: "Payment created from worker payment details page",
+          userID: user.uid,
+          createdAt: new Date()
+        }
+      };
+  
+      // Add related IDs if available. (Here we store them as arrays.)
+      if (selectedExpenseIds.length > 0) {
+        paymentData.relatedExpenseIDs = selectedExpenseIds;
+        // Alternatively, if you want a singular field when only one exists:
+        // paymentData.relatedExpenseID = selectedExpenseIds.length === 1 ? selectedExpenseIds[0] : selectedExpenseIds;
+      }
+      if (selectedHourIds.length > 0) {
+        paymentData.relatedWorkHoursIDs = selectedHourIds;
+        // Similarly for work hours:
+        // paymentData.relatedWorkHoursID = selectedHourIds.length === 1 ? selectedHourIds[0] : selectedHourIds;
+      }
+  
+      // Create a new payment document with status = "processing"
+      await adminPaymentService.createPayment(paymentData);
+  
+      // Navigate to the payments overview page (or show a success message)
       navigate('/admin/payments');
     } catch (error) {
       console.error('Error processing payment:', error);

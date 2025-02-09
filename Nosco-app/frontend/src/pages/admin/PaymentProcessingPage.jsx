@@ -1,13 +1,13 @@
 // src/pages/admin/PaymentProcessingPage.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { adminWorkHoursService } from '../../services/adminWorkHoursService';
+import { adminPaymentService } from '../../services/adminPaymentService';
 import Table from '../../components/common/Table';
 import Tab from '../../components/common/Tab';
 import Card from '../../components/common/Card';
 import { Clock, DollarSign, Building } from 'lucide-react';
 import PaymentHistorySection from '../../components/admin/payments/PaymentHistorySection';
-import ProcessingPaymentsSection from '../../components/admin/payments/ProcessingPaymentsSection'; // If you have this
+import ProcessingPaymentsSection from '../../components/admin/payments/ProcessingPaymentsSection';
 
 const PaymentProcessingPage = () => {
   const navigate = useNavigate();
@@ -16,7 +16,7 @@ const PaymentProcessingPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Table columns for "To Be Paid" tab
+  // Table columns for the "Payment" (toBePaid) tab
   const columns = [
     {
       header: "Worker",
@@ -39,7 +39,7 @@ const PaymentProcessingPage = () => {
       header: "Unpaid Hours",
       accessorKey: "unpaidHoursCount",
       cell: ({ getValue }) => {
-        const count = getValue();
+        const count = getValue() || 0;
         return (
           <div className="flex items-center">
             <Clock className="h-4 w-4 text-gray-500 mr-2" />
@@ -76,16 +76,15 @@ const PaymentProcessingPage = () => {
     }
   ];
 
-  // On mount or when tab changes, load data
+  // When the Payment tab is active, load the workers data with aggregated unpaid amounts
   useEffect(() => {
     if (activeTab === 'toBePaid') {
       (async () => {
         setLoading(true);
         setError(null);
         try {
-          // Now we call the new function
-          const data = await adminWorkHoursService.getAllWorkersWithUnpaidData();
-          // This includes workers with 0 hours
+          // Call the updated method that aggregates both work hours and expense reimbursements
+          const data = await adminPaymentService.getAllWorkersUnpaidData();
           setWorkers(data);
         } catch (err) {
           console.error('Error loading worker data:', err);
@@ -140,10 +139,8 @@ const PaymentProcessingPage = () => {
                   data={workers}
                   columns={columns}
                   emptyMessage="No workers found"
-                  // If you want row click to open something:
                   onRowClick={(worker) => {
-                    // Perhaps open a "Select Items" or "Bonus" flow
-                    // Or navigate to a worker-specific page
+                    // Navigate to the worker's detailed payment page
                     navigate(`/admin/payments/worker/${worker.id}`);
                   }}
                 />
@@ -151,13 +148,8 @@ const PaymentProcessingPage = () => {
             </>
           )}
 
-          {activeTab === 'processing' && (
-            <ProcessingPaymentsSection />
-          )}
-
-          {activeTab === 'history' && (
-            <PaymentHistorySection />
-          )}
+          {activeTab === 'processing' && <ProcessingPaymentsSection />}
+          {activeTab === 'history' && <PaymentHistorySection />}
         </div>
       </Card>
     </div>

@@ -16,6 +16,19 @@ import {
   addDoc
 } from 'firebase/firestore';
 
+/**
+ * Helper: Compute the cost for a work-hour entry using the worker’s base rate.
+ * - regularHours are billed at baseRate
+ * - overtime15x is billed at 1.5 * baseRate
+ * - overtime20x is billed at 2.0 * baseRate
+ */
+function computeHourCost(hourData, baseRate = 0) {
+  const reg = hourData.regularHours || 0;
+  const ot15 = hourData.overtime15x || 0;
+  const ot20 = hourData.overtime20x || 0;
+  return reg * baseRate + ot15 * (baseRate * 1.5) + ot20 * (baseRate * 2.0);
+}
+
 export const adminPaymentService = {
   /**
    * subscribeToAllPayments:
@@ -118,11 +131,11 @@ export const adminPaymentService = {
     try {
       const paymentRef = doc(firestore, 'payments', paymentId);
       const paymentDoc = await getDoc(paymentRef);
-
+  
       if (!paymentDoc.exists()) {
         throw new Error('Payment not found');
       }
-
+  
       const { newStatus, paymentMethod, referenceNumber, comment, adminId } = updateDetails;
       const historyEntry = {
         status: newStatus,
@@ -132,7 +145,7 @@ export const adminPaymentService = {
         adminId,
         timestamp: Timestamp.fromDate(new Date()),
       };
-
+  
       await updateDoc(paymentRef, {
         status: newStatus,
         paymentMethod,
@@ -145,7 +158,7 @@ export const adminPaymentService = {
         },
         processingHistory: arrayUnion(historyEntry),
       });
-
+  
       return true;
     } catch (error) {
       console.error('Error updating payment status:', error);
@@ -187,24 +200,28 @@ export const adminPaymentService = {
    */
   createPayment: async (paymentData) => {
     try {
+      const now = new Date();
       const paymentsRef = collection(firestore, 'payments');
-
+  
+      // If paymentData.status is provided, use it; otherwise default to "processing".
+      const statusToUse = paymentData.status || 'processing';
+  
       const payment = {
         ...paymentData,
         date: Timestamp.fromDate(new Date(paymentData.date)),
-        createdAt: Timestamp.fromDate(new Date()),
-        updatedAt: Timestamp.fromDate(new Date()),
-        status: 'processing',
+        createdAt: Timestamp.fromDate(now),
+        updatedAt: Timestamp.fromDate(now),
+        status: statusToUse,
         processingHistory: [
           {
             status: 'created',
-            comment: paymentData.comments.text,
+            comment: paymentData.comments?.text || '',
             adminId: paymentData.createdBy,
-            timestamp: Timestamp.fromDate(new Date()),
+            timestamp: Timestamp.fromDate(now),
           },
         ],
       };
-
+  
       const docRef = await addDoc(paymentsRef, payment);
       return docRef.id;
     } catch (error) {
@@ -275,6 +292,138 @@ export const adminPaymentService = {
     } catch (error) {
       console.error('Error fetching payments for worker:', error);
       throw error;
+    }
+  },
+
+  /**
+   * Fetch all payments with status in ["completed", "failed"] ordered by updatedAt desc.
+   */
+  getPaymentsHistory: async () => {
+    try {
+      const paymentsRef = collection(firestore, 'payments');
+      const q = query(
+        paymentsRef,
+        where('status', 'in', ['completed', 'failed']),
+        orderBy('updatedAt', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      const payments = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          // Convert Firestore Timestamps if needed:
+          date: data.date?.toDate ? data.date.toDate() : new Date(data.date),
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt),
+          comments: data.comments ? {
+            ...data.comments,
+            createdAt: data.comments.createdAt?.toDate ? data.comments.createdAt.toDate() : new Date(data.comments.createdAt)
+          } : null,
+          processingHistory: (data.processingHistory || []).map(entry => ({
+            ...entry,
+            timestamp: entry.timestamp?.toDate ? entry.timestamp.toDate() : new Date(entry.timestamp),
+          }))
+        };
+      });
+      return payments;
+    } catch (error) {
+      console.error('Error fetching payment history:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * getAllWorkersUnpaidData:
+   * For each worker (from the "users" collection where role === "worker"),
+   * this method aggregates:
+   *   a) Unpaid, approved work hours (and computes their cost using the worker's baseRate),
+   *   b) Unpaid, approved expense reimbursements (using the expense "amount" field).
+   * The result for each worker includes:
+   *   - unpaidHoursCount: total number of hours (sum of regular + overtime),
+   *   - unpaidAmount: total cost from work hours plus expense amounts,
+   *   - projects: an array of project IDs associated with these unpaid items.
+   */
+  getAllWorkersUnpaidData: async () => {
+    try {
+      // 1. Query all workers (users with role "worker")
+      const usersRef = collection(firestore, 'users');
+      const qWorkers = query(usersRef, where('role', '==', 'worker'));
+      const workersSnap = await getDocs(qWorkers);
+
+      const workers = workersSnap.docs.map(docSnap => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          name: data.name || 'Unknown Worker',
+          baseRate: data?.compensation?.baseRate || 0
+          // Add other fields if needed
+        };
+      });
+
+      const results = [];
+
+      // 2. For each worker, aggregate unpaid work hours and expense reimbursements
+      for (const worker of workers) {
+        let totalHoursCount = 0;
+        let totalWorkCost = 0;
+        let totalExpenseAmount = 0;
+        const projects = new Set();
+
+        // Query workHours for unpaid, approved entries for this worker
+        const whRef = collection(firestore, 'workHours');
+        const qHours = query(
+          whRef,
+          where('userID', '==', worker.id),
+          where('status', '==', 'approved'),
+          where('paid', '==', false)
+        );
+        const hoursSnap = await getDocs(qHours);
+        hoursSnap.forEach(docSnap => {
+          const hData = docSnap.data();
+          totalWorkCost += computeHourCost(hData, worker.baseRate);
+          const reg = hData.regularHours || 0;
+          const ot15 = hData.overtime15x || 0;
+          const ot20 = hData.overtime20x || 0;
+          totalHoursCount += reg + ot15 + ot20;
+          if (hData.projectID) {
+            projects.add(hData.projectID);
+          }
+        });
+
+        // Query expense collection for unpaid, approved expense reimbursements
+        const expenseRef = collection(firestore, 'expense'); // Adjust if your collection name differs
+        const qExpenses = query(
+          expenseRef,
+          where('userID', '==', worker.id),
+          where('status', '==', 'approved'),
+          where('paid', '==', false)
+        );
+        const expenseSnap = await getDocs(qExpenses);
+        expenseSnap.forEach(docSnap => {
+          const expData = docSnap.data();
+          totalExpenseAmount += Number(expData.amount || 0);
+          if (expData.projectID) {
+            projects.add(expData.projectID);
+          }
+        });
+
+        // The worker's total unpaid amount is the sum from work hours and expenses
+        const unpaidAmount = totalWorkCost + totalExpenseAmount;
+
+        results.push({
+          ...worker,
+          unpaidHoursCount: totalHoursCount,
+          unpaidAmount,
+          projects: Array.from(projects)
+          // Optionally, include separate totals for work and expense amounts if needed.
+        });
+      }
+
+      return results;
+    } catch (err) {
+      console.error('Error in getAllWorkersUnpaidData:', err);
+      throw err;
     }
   },
 };
