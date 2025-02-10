@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { projectService } from '../../services/projectService';
+import { getCurrentUserProject } from '../../services/workerProjectService';
 import SummaryCard from './SummaryCard';
 import NotificationList from '../common/NotificationList';
 
@@ -17,7 +17,7 @@ const WorkerDashboard = () => {
     const fetchCurrentProject = async () => {
       try {
         if (user?.uid) {
-          const project = await projectService.getCurrentUserProject(user.uid);
+          const project = await getCurrentUserProject(user.uid);
           setCurrentProject(project);
         }
       } catch (err) {
@@ -46,6 +46,7 @@ const WorkerDashboard = () => {
   ];
 
   const navLinks = [
+    { title: "Projects", path: "/worker/projects" },
     { title: "Work Hours", path: "/worker/work-hours" },
     { title: "Expenses", path: "/worker/expenses" },
     { title: "Payments", path: "/worker/payments" },

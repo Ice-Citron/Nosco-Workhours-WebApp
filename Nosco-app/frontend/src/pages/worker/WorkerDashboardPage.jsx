@@ -1,5 +1,5 @@
 import React from 'react';
-import WorkerDashboard from '../components/worker/WorkerDashboard';
+import WorkerDashboard from '../../components/worker/WorkerDashboard';
 
 const WorkerDashboardPage = () => {
   return (

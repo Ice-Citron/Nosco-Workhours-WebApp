@@ -1,6 +1,6 @@
 // pages/NotificationsPage.jsx
 import React from 'react';
-import { NotificationList } from '../components/notifications/NotificationList';
+import { NotificationList } from '../../components/notifications/NotificationList';
 
 const NotificationsPage = () => {
   return (

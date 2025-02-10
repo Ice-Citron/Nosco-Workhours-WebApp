@@ -56,10 +56,12 @@ async function fetchRatesFromAPI(base = 'USD') {
 
 /**
  * getExchangeRatesSettings:
- *  1) get or create the doc
- *  2) if autoUpdateEnabled & lastUpdated > refreshPeriodDays, fetch from API
- *  3) only store codes in selectedCurrencies => rates
- *  4) return final doc data
+- *  1) get or create the doc
+- *  2) if autoUpdateEnabled & lastUpdated > refreshPeriodDays, fetch from API
+- *  3) only store codes in selectedCurrencies => rates
+- *  4) return final doc data
++ *  1) get or create the doc
++ *  2) return doc as-is (no more auto-refresh from client)
  */
 export const getExchangeRatesSettings = async () => {
   const ref = doc(firestore, SETTINGS_COLLECTION, EXCHANGE_RATES_DOC);
@@ -77,50 +79,9 @@ export const getExchangeRatesSettings = async () => {
     return defaultData;
   }
 
-  let data = snapshot.data();
-  const {
-    autoUpdateEnabled,
-    lastUpdated,
-    refreshPeriodDays = 7,
-    selectedCurrencies = [],
-  } = data;
-
-  if (autoUpdateEnabled) {
-    const now = new Date();
-    const lastUpd = lastUpdated?.toDate?.() || new Date(0);
-    const diffDays = (now - lastUpd) / (1000 * 60 * 60 * 24);
-
-    if (diffDays >= refreshPeriodDays) {
-      // Time to fetch from API
-      const baseCurrency = 'USD'; 
-      const apiData = await fetchRatesFromAPI(baseCurrency);
-      const allApiRates = apiData.conversion_rates || {};
-
-      // Build partial rates w/ only selected codes
-      const newRates = {};
-      selectedCurrencies.forEach((code) => {
-        if (allApiRates[code] !== undefined) {
-          newRates[code] = allApiRates[code];
-        } else {
-          newRates[code] = 1.0;
-        }
-      });
-
-      const updatedData = {
-        ...data,
-        rates: newRates,
-        lastUpdated: Timestamp.now(),
-      };
-      await setDoc(ref, updatedData, { merge: true });
-      data = updatedData;
-    }
-  }
-
-  return {
-    refreshPeriodDays,
-    selectedCurrencies,
-    ...data,
-  };
+  const data = snapshot.data();
+  // simply return doc data as-is
+  return data;
 };
 
 /**

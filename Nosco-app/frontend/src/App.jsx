@@ -8,25 +8,23 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import PasswordResetRequestPage from './pages/PasswordResetRequestPage';
 import ContactSupportPage from './pages/ContactSupportPage';
-import WorkerDashboardPage from './pages/WorkerDashboardPage';
-import SubmitExpensePage from './pages/SubmitExpensePage';
-import LogHoursPage from './pages/LogHoursPage';
+import WorkerDashboardPage from './pages/worker/WorkerDashboardPage';
+import SubmitExpensePage from './pages/worker/SubmitExpensePage';
+import LogHoursPage from './pages/worker/LogHoursPage';
 import ReportsPage from './pages/admin/AdminReportsPage';
-import ProfilePage from './pages/ProfilePage';
-import SettingsPage from './pages/SettingsPage';
+import ProfilePage from './pages/worker/ProfilePage';
+import SettingsPage from './pages/worker/SettingsPage';
 import ErrorPage from './pages/ErrorPage';
 import LoadingPage from './pages/LoadingPage';
 import ProtectedRoute from './components/common/ProtectedRoute';
 
 import WorkHoursLayout from './components/timesheets/WorkHoursLayout';
-import WorkHoursHistoryPage from './pages/WorkHoursHistoryPage';
+import WorkHoursHistoryPage from './pages/worker/WorkHoursHistoryPage';
 import ExpensesLayout from './components/expenses/ExpensesLayout';
-import ExpenseHistoryPage from './pages/ExpenseHistoryPage';
-import PaymentHistoryPage from './pages/PaymentHistoryPage';
-import NotificationsPage from './pages/NotificationsPage';
-import RewardsPage from './pages/RewardsPage';
-import FeedbackPage from './pages/FeedbackPage';
-import ProjectInvitationsPage from './pages/ProjectInvitationsPage';
+import ExpenseHistoryPage from './pages/worker/ExpenseHistoryPage';
+import PaymentHistoryPage from './pages/worker/PaymentHistoryPage';
+import NotificationsPage from './pages/worker/NotificationsPage';
+import FeedbackPage from './pages/worker/FeedbackPage';
 
 import AdminLayout from './components/layout/AdminLayout';
 import AdminDashboardPage from './pages/admin/AdminDashboardPage';
@@ -50,6 +48,7 @@ import AdminAuditPage from './pages/admin/AdminAuditPage';
 import AdminAnalyticsPage from './pages/admin/AdminAnalyticsPage';
 import AdminProfilePage from './pages/admin/AdminProfilePage';
 
+import WorkerProjectsPage from './pages/worker/WorkerProjectsPage';
 
 const AuthenticatedApp = () => {
   const { loading } = useAuth();
@@ -87,9 +86,8 @@ const AuthenticatedApp = () => {
           </Route>
           <Route path="/worker/payments" element={<ProtectedRoute><PaymentHistoryPage /></ProtectedRoute>} />
           <Route path="/worker/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
-          <Route path="/worker/rewards" element={<ProtectedRoute><RewardsPage /></ProtectedRoute>} />
           <Route path="/worker/feedback" element={<ProtectedRoute><FeedbackPage /></ProtectedRoute>} />
-          <Route path="/worker/project-invitations" element={<ProtectedRoute><ProjectInvitationsPage /></ProtectedRoute>} />
+          <Route path="/worker/projects" element={<ProtectedRoute><WorkerProjectsPage /></ProtectedRoute>} />
         </Route>
         
 

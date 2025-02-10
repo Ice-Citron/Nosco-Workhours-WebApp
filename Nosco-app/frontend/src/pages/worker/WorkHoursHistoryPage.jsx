@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from './../context/AuthContext';
-import { firestore } from './../firebase/firebase_config';
+import { useAuth } from './../../context/AuthContext';
+import { firestore } from './../../firebase/firebase_config';
 import { collection, query, where, orderBy, getDocs, getDoc, doc } from 'firebase/firestore';
-import Table from './../components/common/Table';
-import Modal from './../components/common/Modal';
+import Table from './../../components/common/Table';
+import Modal from './../../components/common/Modal';
 
 
 const WorkHoursHistoryPage = () => {

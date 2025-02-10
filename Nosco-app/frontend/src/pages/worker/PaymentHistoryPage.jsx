@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { paymentService } from '../services/paymentService';
-import { expenseService } from '../services/expenseService';
-import PaymentHistoryTable from '../components/payments/PaymentHistoryTable';
-import PaymentDetailsModal from '../components/payments/PaymentDetailsModal';
-import PaymentTypeFilter from '../components/payments/PaymentTypeFilter';
-import SelectDropdown from '../components/common/SelectDropdown';
-import { PAYMENT_STATUSES } from '../utils/constants';
+import { useAuth } from '../../context/AuthContext';
+import { paymentService } from '../../services/paymentService';
+import { expenseService } from '../../services/expenseService';
+import PaymentHistoryTable from '../../components/payments/PaymentHistoryTable';
+import PaymentDetailsModal from '../../components/payments/PaymentDetailsModal';
+import PaymentTypeFilter from '../../components/payments/PaymentTypeFilter';
+import SelectDropdown from '../../components/common/SelectDropdown';
+import { PAYMENT_STATUSES } from '../../utils/constants';
 import { collection, doc, getDoc } from 'firebase/firestore';
-import { firestore } from '../firebase/firebase_config';
+import { firestore } from '../../firebase/firebase_config';
 
 const PaymentHistoryPage = () => {
   const { user } = useAuth();

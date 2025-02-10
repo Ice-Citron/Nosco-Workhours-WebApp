@@ -718,6 +718,12 @@ const ProjectDetailsPage = () => {
             {selectedInvitation.cancelReason && (
               <p><strong>Cancel Reason:</strong> {selectedInvitation.cancelReason}</p>
             )}
+            {/* NEW: Show declineReason if it exists */}
+            {selectedInvitation.declineReason && (
+              <p>
+                <strong>Decline Reason:</strong> {selectedInvitation.declineReason}
+              </p>
+            )}
             <div className="mt-4 flex justify-end">
               <button
                 onClick={() => setSelectedInvitation(null)}

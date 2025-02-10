@@ -90,7 +90,7 @@ const WorkerPaymentHistoryTab = ({ workerId }) => {
                   {pmt.date ? pmt.date.toLocaleDateString() : 'N/A'}
                 </td>
                 <td className="py-3 px-3 text-sm text-gray-700 whitespace-nowrap">
-                  {pmt.amount} {pmt.currency}
+                  {Number(pmt.amount).toFixed(2)} {pmt.currency}
                 </td>
                 <td className="py-3 px-3 text-sm text-gray-700 whitespace-nowrap">
                   {pmt.paymentType || 'N/A'}
@@ -132,7 +132,7 @@ const WorkerPaymentHistoryTab = ({ workerId }) => {
           <div className="p-4 space-y-3">
             <p>
               <strong>Amount:</strong> {selectedPayment.amount}{' '}
-              {selectedPayment.currency}
+              {Number(selectedPayment.amount).toFixed(2)}
             </p>
             <p>
               <strong>Date:</strong>{' '}

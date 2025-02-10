@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { getFeedbackHistory } from '../services/feedbackService';
-import FeedbackForm from '../components/feedback/FeedbackForm';
-import FeedbackHistory from '../components/feedback/FeedbackHistory';
-import FeedbackSkeleton from '../components/feedback/FeedbackSkeleton';
+import { useAuth } from '../../context/AuthContext';
+import { getFeedbackHistory } from '../../services/feedbackService';
+import FeedbackForm from '../../components/feedback/FeedbackForm';
+import FeedbackHistory from '../../components/feedback/FeedbackHistory';
+import FeedbackSkeleton from '../../components/feedback/FeedbackSkeleton';
 
 const FeedbackPage = () => {
   const { user } = useAuth();

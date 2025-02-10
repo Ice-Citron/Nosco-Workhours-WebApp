@@ -1,11 +1,11 @@
 // src/pages/LogHoursPage.jsx
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { firestore } from '../firebase/firebase_config';
+import { useAuth } from '../../context/AuthContext';
+import { firestore } from '../../firebase/firebase_config';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import LogHoursForm from '../components/timesheets/LogHoursForm';
-import WorkHoursSummary from '../components/timesheets/WorkHoursSummary';
-import Notification from '../components/common/Notification';
+import LogHoursForm from '../../components/timesheets/LogHoursForm';
+import WorkHoursSummary from '../../components/timesheets/WorkHoursSummary';
+import Notification from '../../components/common/Notification';
 
 const LogHoursPage = () => {
   const { user } = useAuth();

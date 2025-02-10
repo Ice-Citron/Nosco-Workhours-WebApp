@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import {
   getAllInvitations,
   updateInvitationStatus
-} from '../services/projectInvitationService';
-import PendingInvitationsList from '../components/projectInvitations/PendingInvitationsList';
-import AcceptedProjectsList from '../components/projectInvitations/AcceptedProjectsList';
-import ProjectDetailsModal from '../components/projectInvitations/ProjectDetailsModal';
+} from '../../services/workerProjectInvitationService';
+import PendingInvitationsList from '../../components/projectInvitations/PendingInvitationsList';
+import AcceptedProjectsList from '../../components/projectInvitations/AcceptedProjectsList';
+import ProjectDetailsModal from '../../components/projectInvitations/ProjectDetailsModal';
 
 const ProjectInvitationsPage = () => {
   const { user } = useAuth();

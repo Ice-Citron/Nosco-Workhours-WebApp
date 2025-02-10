@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { firestore } from '../firebase/firebase_config';
+import { useAuth } from '../../context/AuthContext';
+import { firestore } from '../../firebase/firebase_config';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import SubmitExpenseForm from '../components/expenses/SubmitExpenseForm';
-import Notification from '../components/common/Notification';
+import SubmitExpenseForm from '../../components/expenses/SubmitExpenseForm';
+import Notification from '../../components/common/Notification';
 
 const SubmitExpensePage = () => {
   const { user } = useAuth();

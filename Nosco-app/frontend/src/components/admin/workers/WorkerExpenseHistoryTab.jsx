@@ -95,7 +95,7 @@ const WorkerExpenseHistoryTab = ({ workerId }) => {
                     {displayDate}
                   </td>
                   <td className="py-3 px-3 text-sm text-gray-700 whitespace-nowrap">
-                    {exp.amount} {exp.currency || 'USD'}
+                    {Number(exp.amount).toFixed(2)} {exp.currency || 'USD'}
                   </td>
                   <td className="py-3 px-3 text-sm text-gray-700 whitespace-nowrap">
                     {exp.expenseType || 'N/A'}
@@ -137,7 +137,7 @@ const WorkerExpenseHistoryTab = ({ workerId }) => {
         {selectedExpense && (
           <div className="p-4 space-y-3">
             <p>
-              <strong>Amount:</strong> {selectedExpense.amount}{' '}
+              <strong>Amount:</strong> {Number(selectedExpense.amount).toFixed(2)}{' '}
               {selectedExpense.currency}
             </p>
             <p>
