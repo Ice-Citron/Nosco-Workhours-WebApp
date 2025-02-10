@@ -28,9 +28,60 @@ const ProjectDetailsPage = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [statusAction, setStatusAction] = useState(null);
 
+  const [selectedInvitation, setSelectedInvitation] = useState(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+
+  const openDetailsModal = (invitation) => {
+    setSelectedInvitation(invitation);
+  };
+
   useEffect(() => {
     fetchProjectData();
   }, [projectId]);
+
+  
+  const handleRetryInvitation = async (invitationId) => {
+    try {
+      await adminProjectInvitationService.retryInvitation(invitationId);
+      await fetchProjectData();
+    } catch (err) {
+      console.error('Error retrying invitation:', err);
+    }
+  };
+
+  const handleReinstateInvitation = async (invitationId) => {
+    try {
+      await adminProjectInvitationService.reinstateInvitation(invitationId);
+      await fetchProjectData(); // refresh the project and invitation data
+    } catch (err) {
+      console.error('Error reinstating invitation:', err);
+    }
+  };
+
+  // New function to handle sending a nudge for an invitation
+  const handleNudge = async (invitationId) => {
+    try {
+      // Call your service to send a nudge (make sure you have a corresponding method in adminProjectInvitationService)
+      await adminProjectInvitationService.sendNudge(invitationId);
+      // Reload the project data to update the invitation list
+      await fetchProjectData();
+    } catch (err) {
+      console.error('Error sending nudge:', err);
+    }
+  };
+
+  // New function to handle cancelling an invitation
+  const handleCancelInvitation = async (invitationId) => {
+    // Optionally, prompt for a cancellation reason (or you could use a modal)
+    const reason = prompt('Enter cancellation reason:');
+    if (!reason) return;
+    try {
+      await adminProjectInvitationService.cancelInvitation(invitationId, reason);
+      await fetchProjectData();
+    } catch (err) {
+      console.error('Error cancelling invitation:', err);
+    }
+  };
 
   const fetchProjectData = async () => {
     try {
@@ -53,7 +104,20 @@ const ProjectDetailsPage = () => {
 
       // Fetch invitations
       const invitationsData = await adminProjectInvitationService.getProjectInvitations(projectId);
-      setInvitations(invitationsData);
+      const now = new Date();
+      for (const inv of invitationsData) {
+        if (
+          inv.status === 'pending' &&
+          inv.requiredResponseDate &&
+          inv.requiredResponseDate.toDate &&
+          inv.requiredResponseDate.toDate() < now
+        ) {
+          await adminProjectInvitationService.expireInvitation(inv.id);
+        }
+      }
+      // Re-fetch the invitations after expiring old ones:
+      const updatedInvitations = await adminProjectInvitationService.getProjectInvitations(projectId);
+      setInvitations(updatedInvitations);
     } catch (err) {
       setError('Failed to load project data');
       console.error('Error fetching project data:', err);
@@ -434,33 +498,17 @@ const ProjectDetailsPage = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
-                  >
-                    Worker
-                  </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
-                  >
-                    Status
-                  </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
-                  >
-                    Invited On
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Worker</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invited On</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Nudge</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {invitations.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={3}
-                      className="px-6 py-4 text-center text-sm text-gray-500"
-                    >
+                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
                       No invitations found.
                     </td>
                   </tr>
@@ -477,6 +525,70 @@ const ProjectDetailsPage = () => {
                         {inv.createdAt && inv.createdAt.toDate
                           ? format(inv.createdAt.toDate(), 'MMM d, yyyy')
                           : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {inv.lastNudgeSent && inv.lastNudgeSent.toDate
+                          ? format(inv.lastNudgeSent.toDate(), 'MMM d, yyyy')
+                          : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        {/* Always show a Details button */}
+                        <button
+                          onClick={() => openDetailsModal(inv)}  // You need to implement openDetailsModal (or reuse your existing details handler)
+                          className="text-gray-600 hover:text-gray-900 inline-flex items-center mr-2"
+                        >
+                          Details
+                        </button>
+                        
+                        {inv.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleNudge(inv.id)}
+                              className="text-blue-600 hover:text-blue-900 inline-flex items-center mr-2"
+                            >
+                              Nudge
+                            </button>
+                            <button
+                              onClick={() => handleCancelInvitation(inv.id)}
+                              className="text-red-600 hover:text-red-900 inline-flex items-center"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
+
+                        {inv.status === 'accepted' && (
+                          <>
+                            <button
+                              onClick={() => handleCancelInvitation(inv.id)}
+                              className="text-red-600 hover:text-red-900 inline-flex items-center"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        )}
+
+                        {inv.status === 'rejected' && (
+                          <>
+                            <button
+                              onClick={() => handleRetryInvitation(inv.id)}
+                              className="text-green-600 hover:text-green-900 inline-flex items-center"
+                            >
+                              Retry
+                            </button>
+                          </>
+                        )}
+
+                        {inv.status === 'cancelled' && (
+                          <>
+                            <button
+                              onClick={() => handleReinstateInvitation(inv.id)}
+                              className="text-green-600 hover:text-green-900 inline-flex items-center"
+                            >
+                              Reinstate
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -548,6 +660,7 @@ const ProjectDetailsPage = () => {
               console.error('Error inviting worker:', err);
             }
           }}
+          projectId={projectId} // Pass projectId here!
           existingWorkers={project.workers ? Object.keys(project.workers) : []}
         />
       )}
@@ -579,6 +692,43 @@ const ProjectDetailsPage = () => {
           </div>
         </div>
       </Modal>
+
+      {selectedInvitation && (
+        <Modal
+          isOpen={true}
+          onClose={() => setSelectedInvitation(null)}
+          title="Invitation Details"
+        >
+          <div className="p-6">
+            <p><strong>Worker:</strong> {selectedInvitation.user?.name || 'Unknown'}</p>
+            <p><strong>Status:</strong> {selectedInvitation.status}</p>
+            <p>
+              <strong>Invited On:</strong>{' '}
+              {selectedInvitation.createdAt && selectedInvitation.createdAt.toDate
+                ? format(selectedInvitation.createdAt.toDate(), 'MMM d, yyyy')
+                : '-'}
+            </p>
+            <p>
+              <strong>Required Response:</strong>{' '}
+              {selectedInvitation.requiredResponseDate && selectedInvitation.requiredResponseDate.toDate
+                ? format(selectedInvitation.requiredResponseDate.toDate(), 'MMM d, yyyy')
+                : '-'}
+            </p>
+            <p><strong>Message:</strong> {selectedInvitation.message}</p>
+            {selectedInvitation.cancelReason && (
+              <p><strong>Cancel Reason:</strong> {selectedInvitation.cancelReason}</p>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setSelectedInvitation(null)}
+                className="px-4 py-2 bg-nosco-red hover:bg-nosco-red-dark text-white rounded-md"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

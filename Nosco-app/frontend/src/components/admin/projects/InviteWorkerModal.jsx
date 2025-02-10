@@ -1,7 +1,7 @@
 // src/components/admin/projects/InviteWorkerModal.jsx
 import React, { useState, useEffect } from 'react';
 import Modal from '../../common/Modal';
-import { adminUserService } from '../../../services/adminUserService';
+import { adminProjectInvitationService } from '../../../services/adminProjectInvitationService';
 
 const InviteWorkerModal = ({ 
   isOpen, 
@@ -16,29 +16,24 @@ const InviteWorkerModal = ({
   const [message, setMessage] = useState('');
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchAvailableWorkers();
-  }, []);
-
   const fetchAvailableWorkers = async () => {
     try {
       setLoading(true);
-      const allWorkers = await adminUserService.getActiveWorkers();
-      
-      // Filter out workers who are already invited or assigned
-      const availableWorkers = allWorkers.filter(
-        worker => !existingWorkers.includes(worker.id)
-      );
-      
+      // Use the new function passing the projectId prop from the parent
+      const availableWorkers = await adminProjectInvitationService.getAvailableWorkers(projectId);
       setWorkers(availableWorkers);
       setError(null);
     } catch (err) {
       setError('Failed to load workers');
-      console.error('Error loading workers:', err);
+      console.error('Error loading available workers:', err);
     } finally {
       setLoading(false);
     }
   };
+  
+  useEffect(() => {
+    fetchAvailableWorkers();
+  }, [projectId]); // Make sure projectId is in the dependency array
 
   const handleSubmit = async (e) => {
     e.preventDefault();
