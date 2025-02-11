@@ -24,6 +24,7 @@ const ExpenseHistoryPage = () => {
 
     useEffect(() => {
         fetchExpenses();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.uid]);
 
     const fetchExpenses = async () => {
@@ -87,7 +88,9 @@ const ExpenseHistoryPage = () => {
                         description: data.description || '',
                         projectName,
                         adminComments: data.adminComments || '',
-                        receipts: Array.isArray(data.receipts) ? data.receipts : []
+                        receipts: Array.isArray(data.receipts) ? data.receipts : [],
+                        // NEW FIELD:
+                        paid: data.paid ?? false, // default false if missing
                     };
 
                     console.log('Processed document:', processedDoc);
@@ -108,7 +111,7 @@ const ExpenseHistoryPage = () => {
 
     const handleFilter = (e) => {
         const { name, value } = e.target;
-        setFilters(prev => ({
+        setFilters((prev) => ({
             ...prev,
             [name]: value
         }));
@@ -117,16 +120,17 @@ const ExpenseHistoryPage = () => {
 
     const exportToCSV = () => {
         // Removed the 'Points' column
-        const headers = ['Date', 'Type', 'Amount', 'Currency', 'Project', 'Status', 'Description'];
+        const headers = ['Date', 'Type', 'Amount', 'Currency', 'Project', 'Status', 'Paid', 'Description'];
         const csvContent = [
             headers.join(','),
-            ...filteredData.map(row => [
+            ...filteredData.map((row) => [
                 row.date.toLocaleDateString(),
                 row.expenseType,
                 row.amount.toFixed(2),
                 row.currency,
                 row.projectName,
                 row.status,
+                row.paid ? 'Yes' : 'No', // or 'Paid'/'Unpaid'
                 // Notice we just skip points
                 `"${row.description || ''}"`
             ].join(','))
@@ -139,7 +143,7 @@ const ExpenseHistoryPage = () => {
         link.click();
     };
 
-    // Removed the 'Points' column from the table columns
+    // TABLE COLUMNS
     const columns = [
         {
             header: 'Date',
@@ -197,9 +201,27 @@ const ExpenseHistoryPage = () => {
                 );
             },
         },
+        // NEW COLUMN: "Paid"
+        {
+            header: 'Paid',
+            accessorKey: 'paid',
+            cell: (info) => {
+                const isPaid = info.getValue();
+                return isPaid ? (
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Paid
+                    </span>
+                ) : (
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        Unpaid
+                    </span>
+                );
+            },
+        },
     ];
 
-    const filteredData = expenses.filter(entry => {
+    // FILTER AND SORT
+    const filteredData = expenses.filter((entry) => {
         const matchesStatus = !filters.status || entry.status === filters.status;
         const matchesDateFrom = !filters.dateFrom || entry.date >= new Date(filters.dateFrom);
         const matchesDateTo = !filters.dateTo || entry.date <= new Date(filters.dateTo);
@@ -238,7 +260,7 @@ const ExpenseHistoryPage = () => {
                 <h1 className="text-2xl font-bold">Expense History</h1>
                 <button
                     onClick={exportToCSV}
-                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                    className="bg-nosco-red text-white px-4 py-2 rounded hover:bg-nosco-red-dark"
                 >
                     Export to CSV
                 </button>
@@ -294,7 +316,7 @@ const ExpenseHistoryPage = () => {
                     columns,
                     firstRow: paginatedData[0]
                 })}
-                
+
                 <Table
                     data={paginatedData}
                     columns={columns}
@@ -309,14 +331,14 @@ const ExpenseHistoryPage = () => {
                 <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
                     <div className="flex-1 flex justify-between sm:hidden">
                         <button
-                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                             disabled={currentPage === 1}
                             className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
                         >
                             Previous
                         </button>
                         <button
-                            onClick={() => setCurrentPage(prev => prev + 1)}
+                            onClick={() => setCurrentPage((prev) => prev + 1)}
                             disabled={currentPage * itemsPerPage >= filteredData.length}
                             className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
                         >
@@ -372,12 +394,13 @@ const ExpenseHistoryPage = () => {
                 title="Expense Details"
             >
                 {selectedEntry && (
-                    // Added p-6 for nicer spacing
                     <div className="p-6 space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <p className="text-sm font-medium text-gray-500">Date</p>
-                                <p className="mt-1">{selectedEntry.date.toLocaleDateString()}</p>
+                                <p className="mt-1">
+                                    {selectedEntry.date.toLocaleDateString()}
+                                </p>
                             </div>
                             <div>
                                 <p className="text-sm font-medium text-gray-500">Type</p>
@@ -413,13 +436,17 @@ const ExpenseHistoryPage = () => {
                         {selectedEntry.description && (
                             <div>
                                 <p className="text-sm font-medium text-gray-500">Description</p>
-                                <p className="mt-1 text-gray-700">{selectedEntry.description}</p>
+                                <p className="mt-1 text-gray-700">
+                                    {selectedEntry.description}
+                                </p>
                             </div>
                         )}
 
                         {selectedEntry.receipts && selectedEntry.receipts.length > 0 && (
                             <div>
-                                <p className="text-sm font-medium text-gray-500 mb-2">Receipts</p>
+                                <p className="text-sm font-medium text-gray-500 mb-2">
+                                    Receipts
+                                </p>
                                 <div className="grid grid-cols-2 gap-4">
                                     {selectedEntry.receipts.map((receipt, index) => (
                                         <a
@@ -453,15 +480,14 @@ const ExpenseHistoryPage = () => {
 
                         {selectedEntry.status === 'rejected' && selectedEntry.rejectionReason && (
                             <div className="bg-red-50 p-4 rounded-md">
-                                <p className="text-sm font-medium text-red-800">Rejection Reason</p>
-                                <p className="mt-1 text-red-700">{selectedEntry.rejectionReason}</p>
+                                <p className="text-sm font-medium text-red-800">
+                                    Rejection Reason
+                                </p>
+                                <p className="mt-1 text-red-700">
+                                    {selectedEntry.rejectionReason}
+                                </p>
                             </div>
                         )}
-
-                        {/* 
-                          Removed the pointsAwarded block entirely:
-                          {selectedEntry.pointsAwarded && ( ... )} 
-                        */}
 
                         {selectedEntry.approvedBy && selectedEntry.approvalDate && (
                             <div className="bg-gray-50 p-4 rounded-md">
@@ -473,6 +499,20 @@ const ExpenseHistoryPage = () => {
                                 </p>
                             </div>
                         )}
+
+                        {/* Optionally show the paid/unpaid status here if desired */}
+                        <div>
+                            <p className="text-sm font-medium text-gray-500">Payment Status</p>
+                            <span
+                                className={`mt-1 inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                                    selectedEntry.paid
+                                        ? 'bg-green-100 text-green-800'
+                                        : 'bg-gray-100 text-gray-800'
+                                }`}
+                            >
+                                {selectedEntry.paid ? 'Paid' : 'Unpaid'}
+                            </span>
+                        </div>
                     </div>
                 )}
             </Modal>

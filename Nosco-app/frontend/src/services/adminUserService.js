@@ -89,6 +89,7 @@ export const adminUserService = {
         updatedAt: Timestamp.now(),
         profilePic: '',
         bankAccounts: [],
+        currentActiveProject: '',
         compensation: {
           baseRate,
           otRate15,

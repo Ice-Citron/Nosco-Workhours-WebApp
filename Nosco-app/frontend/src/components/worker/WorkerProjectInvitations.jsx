@@ -158,22 +158,22 @@ const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations, us
                         : '-'}
                     </p>
                   </div>
-                  <div className="space-x-2">
+                  <div className="flex flex-col sm:flex-row gap-2 items-center justify-end">
                     <button
-                      onClick={() => handleAccept(inv.id)}
-                      className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
+                    onClick={() => handleAccept(inv.id)}
+                    className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
                     >
-                      Accept
+                    Accept
                     </button>
                     <button
-                      onClick={() => handleReject(inv.id)}
-                      className="bg-nosco-red hover:bg-nosco-red-dark text-white px-3 py-1 rounded"
+                    onClick={() => handleReject(inv.id)}
+                    className="bg-nosco-red hover:bg-nosco-red-dark text-white px-3 py-1 rounded"
                     >
-                      Reject
+                    Reject
                     </button>
-                  </div>
                 </div>
               </div>
+            </div>
             ))}
           </div>
         )

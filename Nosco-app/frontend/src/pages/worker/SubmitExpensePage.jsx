@@ -1,7 +1,9 @@
+// src/pages/worker/SubmitExpensePage.jsx
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { firestore } from '../../firebase/firebase_config';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import SubmitExpenseForm from '../../components/expenses/SubmitExpenseForm';
 import Notification from '../../components/common/Notification';
 
@@ -12,49 +14,42 @@ const SubmitExpensePage = () => {
   const [notification, setNotification] = useState(null);
 
   useEffect(() => {
-    const fetchCurrentProject = async () => {
+    if (!user?.uid) return;
+
+    const fetchActiveProject = async () => {
       try {
-        if (!user?.uid) return;
-
-        const assignmentsRef = collection(firestore, 'projectAssignments');
-        const q = query(
-          assignmentsRef,
-          where('userID', '==', user.uid),
-          where('status', '==', 'active')
-        );
-
-        const snapshot = await getDocs(q);
-        
-        if (!snapshot.empty) {
-          const assignment = snapshot.docs[0].data();
-          const projectRef = doc(firestore, 'projects', assignment.projectID);
-          const projectDoc = await getDoc(projectRef);
-
-          if (projectDoc.exists()) {
+        if (user.currentActiveProject) {
+          // 1) If user has an active project, fetch its doc
+          const projectRef = doc(firestore, 'projects', user.currentActiveProject);
+          const projectSnap = await getDoc(projectRef);
+          if (projectSnap.exists()) {
             setCurrentProject({
-              id: projectDoc.id,
-              ...projectDoc.data()
+              id: projectSnap.id,
+              ...projectSnap.data(),
             });
           }
+        } else {
+          // 2) No active project => you can treat as "general expense" or just null
+          setCurrentProject(null);
         }
       } catch (err) {
-        console.error('Error fetching project:', err);
+        console.error('Error fetching active project:', err);
         setNotification({
           type: 'error',
-          message: 'Failed to fetch project details'
+          message: 'Failed to fetch your active project details',
         });
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCurrentProject();
+    fetchActiveProject();
   }, [user]);
 
   const handleSubmitSuccess = () => {
     setNotification({
       type: 'success',
-      message: 'Expense claim submitted successfully!'
+      message: 'Expense claim submitted successfully!',
     });
   };
 
