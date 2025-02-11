@@ -52,7 +52,6 @@ const WorkerDashboard = () => {
     { title: "Payments", path: "/worker/payments" },
     { title: "Notifications", path: "/worker/notifications" },
     { title: "Feedback", path: "/worker/feedback" },
-    { title: "Project Invitations", path: "/worker/project-invitations" },
   ];
 
   if (loading) {

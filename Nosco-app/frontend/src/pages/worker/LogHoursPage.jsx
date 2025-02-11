@@ -1,11 +1,13 @@
-// src/pages/LogHoursPage.jsx
+// src/pages/worker/LogHoursPage.jsx
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { firestore } from '../../firebase/firebase_config';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import LogHoursForm from '../../components/timesheets/LogHoursForm';
 import WorkHoursSummary from '../../components/timesheets/WorkHoursSummary';
 import Notification from '../../components/common/Notification';
+import { timesheetService } from '../../services/timesheetService';
 
 const LogHoursPage = () => {
   const { user } = useAuth();
@@ -14,94 +16,69 @@ const LogHoursPage = () => {
   const [notification, setNotification] = useState(null);
 
   useEffect(() => {
-    const fetchCurrentProject = async () => {
+    // 1) If user has "currentActiveProject" set, fetch that project
+    const fetchProject = async () => {
+      if (!user?.uid) return;
       try {
-        if (!user?.uid) return;
-        console.log('Starting project fetch...'); // New log
-        
-        // Get project assignment
-        const assignmentsRef = collection(firestore, 'projectAssignments');
-        const q = query(
-          assignmentsRef,
-          where('userID', '==', user.uid),
-          where('status', '==', 'active')
-        );
-        
-        console.log('Fetching assignment...'); // New log
-        const assignmentSnapshot = await getDocs(q);
-        console.log('Assignment snapshot received'); // New log
-        
-        if (!assignmentSnapshot.empty) {
-          const assignment = assignmentSnapshot.docs[0].data();
-          console.log('Assignment data:', assignment); // New log
-          
-          // Get project details
-          console.log('Fetching project with ID:', assignment.projectID); // New log
-          const projectRef = doc(firestore, 'projects', assignment.projectID);
-          const projectDoc = await getDoc(projectRef);
-          console.log('Project document received:', projectDoc.exists()); // New log
-  
-          if (projectDoc.exists()) {
-            const projectData = {
-              id: projectDoc.id,
-              ...projectDoc.data(),
-              assignmentId: assignmentSnapshot.docs[0].id
-            };
-            console.log('Setting project data:', projectData); // New log
-            setCurrentProject(projectData);
+        if (user.currentActiveProject) {
+          const projectRef = doc(firestore, 'projects', user.currentActiveProject);
+          const projectSnap = await getDoc(projectRef);
+          if (projectSnap.exists()) {
+            setCurrentProject({
+              id: projectSnap.id,
+              ...projectSnap.data(),
+            });
+          } else {
+            console.warn('No project found with ID:', user.currentActiveProject);
           }
+        } else {
+          // User doc doesn't have currentActiveProject
+          setCurrentProject(null);
         }
       } catch (err) {
-        console.error('Detailed error:', err);
+        console.error('Error fetching project:', err);
         setNotification({
           type: 'error',
-          message: `Failed to fetch project details: ${err.message}`
+          message: 'Failed to fetch active project',
         });
       } finally {
-        console.log('Setting loading to false'); // New log
         setLoading(false);
       }
     };
-  
-    fetchCurrentProject();
+    fetchProject();
   }, [user]);
 
   const handleSubmit = async (formData) => {
     try {
       if (!user?.uid || !currentProject?.id) {
-        throw new Error('Missing user or project information');
+        throw new Error('Missing user or project info');
       }
-
-      // TODO: Implement work hours submission
-      // Create workHours collection entry
+      // 2) Prepare data for timesheet submission
       const workHoursData = {
-        userId: user.uid,
-        projectId: currentProject.id,
-        date: formData.date,
-        regularHours: parseFloat(formData.regularHours),
-        overtime15x: parseFloat(formData.overtime15x || 0),
-        overtime20x: parseFloat(formData.overtime20x || 0),
+        userID: user.uid,            // match Firestore field
+        projectID: currentProject.id,
+        date: formData.date,         // a JS Date
+        regularHours: formData.regularHours,
+        overtime15x: formData.overtime15x,
+        overtime20x: formData.overtime20x,
         remarks: formData.remarks,
-        status: 'pending',
-        createdAt: new Date()
       };
 
-      console.log('Would submit:', workHoursData);
-      
+      // 3) Submit via timesheetService
+      await timesheetService.submitWorkHours(workHoursData);
       setNotification({
         type: 'success',
-        message: 'Work hours submitted successfully'
+        message: 'Work hours submitted successfully.',
       });
-    } catch (err) {
-      console.error('Submit error:', err);
+    } catch (error) {
+      console.error('Submit error:', error);
       setNotification({
         type: 'error',
-        message: err.message || 'Failed to submit work hours'
+        message: error.message || 'Failed to submit work hours',
       });
     }
   };
 
-  // Loading skeleton
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto p-4">
@@ -128,7 +105,7 @@ const LogHoursPage = () => {
       )}
 
       <h1 className="text-2xl font-bold mb-6">Log Work Hours</h1>
-      
+
       {!currentProject ? (
         <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
           <p className="text-yellow-800">
@@ -138,20 +115,13 @@ const LogHoursPage = () => {
       ) : (
         <>
           <div className="bg-gray-50 p-4 rounded mb-6">
-            <h2 className="font-medium">Current Project</h2>
-            <p>{currentProject.name}</p>
+            <h2 className="font-medium mb-1">{currentProject.name}</h2>
             <p className="text-sm text-gray-600">{currentProject.description}</p>
-            <p className="text-sm text-gray-600">Location: {currentProject.location}</p>
           </div>
-          
-          <LogHoursForm 
-            projects={[{
-              value: currentProject.id,
-              label: currentProject.name
-            }]} 
-            onSubmit={handleSubmit} 
-          />
-          
+
+          <LogHoursForm onSubmit={handleSubmit} />
+
+          {/* Show a recent summary if you like */}
           <div className="mt-8">
             <WorkHoursSummary />
           </div>
