@@ -413,6 +413,7 @@ export const adminExpenseService = {
         pointsAwarded: !expenseData.isGeneralExpense ? Math.floor((parseFloat(expenseData.amount) / 50) * 2) / 2 : null,
         currency: expenseData.currency || 'USD',
         receipts: expenseData.receipts || [], // Add this line
+        paid: false,
       });
       return docRef.id;
     } catch (error) {

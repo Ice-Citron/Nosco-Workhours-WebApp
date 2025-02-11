@@ -6,7 +6,6 @@
     "profilePic": "https://firebasestorage.../admin-pic.jpg",
     "role": "admin",
     "department": "Operations", // Additional fields for admins
-    "permissions": ["approve_expenses", "manage_payments", "manage_users"],
     "position": "Senior Operations Manager",
     "createdAt": Timestamp,
     "lastActive": Timestamp

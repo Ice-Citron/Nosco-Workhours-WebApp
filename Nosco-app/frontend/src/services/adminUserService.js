@@ -129,8 +129,6 @@ export const adminUserService = {
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
         profilePic: '',
-        // Set default admin permissions if none are provided
-        permissions: adminData.permissions || ['approve_expenses', 'manage_payments', 'manage_users'],
         phoneNumber: adminData.phoneNumber || ''
       };
 

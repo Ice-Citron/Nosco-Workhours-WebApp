@@ -35,13 +35,6 @@ const AdminDetailsModal = ({ admin, onClose }) => {
           </p>
         )}
 
-        {/* Conditionally show permissions array if it exists */}
-        {admin.permissions && (
-          <p>
-            <strong>Permissions:</strong> {admin.permissions.join(', ')}
-          </p>
-        )}
-
         {/* Close button, aligned right */}
         <div className="pt-4 flex justify-end">
           <button 

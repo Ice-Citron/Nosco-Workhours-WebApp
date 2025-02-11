@@ -87,85 +87,85 @@ const GeneralExpenseTable = ({
   }
 
   return (
-    <table className="min-w-full">
-      <thead>
-        <tr>
-          <th className="text-xs font-medium text-gray-500 uppercase text-left py-3">
-            DATE ↓
-          </th>
-          <th className="text-xs font-medium text-gray-500 uppercase text-left py-3">
-            EXPENSE TYPE
-          </th>
-          <th className="text-xs font-medium text-gray-500 uppercase text-left py-3">
-            AMOUNT
-          </th>
-          <th className="text-xs font-medium text-gray-500 uppercase text-left py-3">
-            PROJECT
-          </th>
-          <th className="text-xs font-medium text-gray-500 uppercase text-left py-3">
-            DESCRIPTION
-          </th>
-          <th className="text-xs font-medium text-gray-500 uppercase text-left py-3">
-            TYPE
-          </th>
-          <th className="text-xs font-medium text-gray-500 uppercase text-left py-3">
-            STATUS
-          </th>
-          <th className="text-xs font-medium text-gray-500 uppercase text-left py-3">
-            ACTIONS
-          </th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-gray-100">
-        {expenses.map((expense) => (
-          <tr key={expense.id}>
-            <td className="py-4">
-              {format(expense.date.toDate(), 'MMM d, yyyy')}
-            </td>
-            <td className="py-4">
-              {expense.expenseType}
-            </td>
-            <td className="py-4">
-              {expense.amount.toFixed(2)} {expense.currency}
-            </td>
-            <td className="py-4">
-              {expense.projectID ? expense.project?.name : 'N/A'}
-            </td>
-            <td className="py-4">
-              {expense.description}
-            </td>
-            <td className="py-4">
-              {expense.isGeneralExpense ? 'Company' : 'Worker'}
-            </td>
-            <td className="py-4">
-              <span className={`px-2 py-1 rounded text-sm ${
-                expense.status === 'approved'
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {expense.status === 'approved' ? 'Approved' : 'Rejected'}
-              </span>
-            </td>
-            <td className="py-4">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => onViewDetails(expense)}
-                  className="px-3 py-1 bg-blue-50 text-blue-600 border border-blue-200 rounded hover:bg-blue-100 transition text-sm"
-                >
-                  View Details
-                </button>
-                <button
-                  onClick={() => onEdit(expense)}
-                  className="px-3 py-1 bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 transition text-sm"
-                >
-                  Edit
-                </button>
-              </div>
-            </td>
+    // Outer wrapper to allow scrolling
+    <div className="overflow-x-auto max-h-96">
+      {/* 
+        border-separate + border-spacing-y-2 adds vertical spacing between rows
+        you can also do border-spacing-x if you want horizontal spacing
+      */}
+      <table className="min-w-full text-sm border-separate border-spacing-y-2">
+        <thead>
+          <tr className="text-xs font-medium text-gray-500 uppercase text-left">
+            <th className="py-3 px-4">Date ↓</th>
+            <th className="py-3 px-4">Expense Type</th>
+            <th className="py-3 px-4">Amount</th>
+            <th className="py-3 px-4">Project</th>
+            <th className="py-3 px-4">Description</th>
+            <th className="py-3 px-4">Type</th>
+            <th className="py-3 px-4">Status</th>
+            <th className="py-3 px-4">Paid?</th>
+            <th className="py-3 px-4">Actions</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {expenses.map((expense) => (
+            <tr key={expense.id} className="bg-white">
+              {/* Each cell has extra padding: py-4 px-4 */}
+              <td className="py-4 px-4">
+                {format(expense.date.toDate(), 'MMM d, yyyy')}
+              </td>
+              <td className="py-4 px-4">
+                {expense.expenseType}
+              </td>
+              <td className="py-4 px-4">
+                {expense.amount.toFixed(2)} {expense.currency}
+              </td>
+              <td className="py-4 px-4">
+                {expense.projectID ? expense.project?.name : 'N/A'}
+              </td>
+              <td className="py-4 px-4">
+                {expense.description}
+              </td>
+              <td className="py-4 px-4">
+                {expense.isGeneralExpense ? 'Company' : 'Worker'}
+              </td>
+              <td className="py-4 px-4">
+                <span
+                  className={`px-2 py-1 rounded text-xs ${
+                    expense.status === 'approved'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}
+                >
+                  {expense.status === 'approved' ? 'Approved' : 'Rejected'}
+                </span>
+              </td>
+              <td className="py-4 px-4">
+                {expense.isGeneralExpense 
+                ? '' // blank if general expense
+                : (expense.paid ? 'Yes' : 'No')}
+              </td>
+              <td className="py-4 px-4">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onViewDetails(expense)}
+                    className="px-3 py-1 bg-blue-50 text-blue-600 border border-blue-200 rounded hover:bg-blue-100 transition text-xs"
+                  >
+                    View Details
+                  </button>
+                  <button
+                    onClick={() => onEdit(expense)}
+                    className="px-3 py-1 bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 transition text-xs"
+                  >
+                    Edit
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 };
 

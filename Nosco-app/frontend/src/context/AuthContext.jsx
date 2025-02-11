@@ -43,7 +43,6 @@ export const AuthProvider = ({ children }) => {
             email: firebaseUser.email,
             role: userData?.role || 'worker',
             profilePic: userData?.profilePic || '../assets/images/default-pfp.png',
-            permissions: userData?.permissions || [],
             currentActiveProject: userData?.currentActiveProject || null,
           };
           
