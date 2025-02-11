@@ -1,34 +1,44 @@
-// src/components/worker/WorkerProjectInvitations.jsx
 import React from 'react';
 import { format } from 'date-fns';
-import { acceptProjectInvitation, declineProjectInvitation } from '../../services/workerProjectInvitationService';
+import {
+  acceptProjectInvitation,
+  declineProjectInvitation
+} from '../../services/workerProjectInvitationService';
 
-const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations }) => {
+console.log("WorkerProjectInvitations component loaded");
+
+const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations, user }) => {
   const handleAccept = async (invitationId) => {
     try {
-      await acceptProjectInvitation(invitationId);
+      console.log("handleAccept called for invitationId:", invitationId, "with user:", user.uid);
+      // Pass the worker’s UID
+      await acceptProjectInvitation(invitationId, user.uid);
       refreshInvitations();
     } catch (error) {
       console.error('Error accepting invitation:', error);
     }
   };
 
-  const handleDecline = async (invitationId) => {
+  const handleReject = async (invitationId) => {
     try {
-      const reason = prompt("Enter the reason for declining this invitation:");
+      console.log("handleReject called for invitationId:", invitationId, "with user:", user.uid);
+      const reason = prompt("Enter the reason for rejecting this invitation:");
       if (!reason) return;
-      await declineProjectInvitation(invitationId, undefined, reason);
+      // Pass the worker’s UID
+      await declineProjectInvitation(invitationId, user.uid, reason);
       refreshInvitations();
     } catch (error) {
-      console.error('Error declining invitation:', error);
+      console.error('Error rejecting invitation:', error);
     }
   };
 
   if (loading) {
+    console.log("WorkerProjectInvitations: Loading invitations...");
     return <div>Loading invitations...</div>;
   }
 
   if (!invitations || invitations.length === 0) {
+    console.log("WorkerProjectInvitations: No invitations found.");
     return <div className="text-gray-500 text-center">No invitations found.</div>;
   }
 
@@ -43,13 +53,13 @@ const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations }) 
               </h3>
               <p className="text-gray-600">{invitation.message}</p>
               <p className="text-sm text-gray-500">
-                Invited on:{" "}
+                Invited on:{' '}
                 {invitation.createdAt
-                  ? format(new Date(invitation.createdAt.seconds * 1000), "MMM d, yyyy")
-                  : "-"}
+                  ? format(new Date(invitation.createdAt.seconds * 1000), 'MMM d, yyyy')
+                  : '-'}
               </p>
             </div>
-            {invitation.status.toLowerCase() === "pending" ? (
+            {invitation.status.toLowerCase() === 'pending' ? (
               <div className="space-x-2">
                 <button
                   onClick={() => handleAccept(invitation.id)}
@@ -58,15 +68,16 @@ const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations }) 
                   Accept
                 </button>
                 <button
-                  onClick={() => handleDecline(invitation.id)}
+                  onClick={() => handleReject(invitation.id)}
                   className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
                 >
-                  Decline
+                  Reject
                 </button>
               </div>
             ) : (
               <span className="px-3 py-1 rounded-full text-sm font-medium text-gray-700 border">
-                {invitation.status.charAt(0).toUpperCase() + invitation.status.slice(1)}
+                {invitation.status.charAt(0).toUpperCase() +
+                  invitation.status.slice(1)}
               </span>
             )}
           </div>

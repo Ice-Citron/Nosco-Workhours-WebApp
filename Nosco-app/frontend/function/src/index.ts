@@ -11,7 +11,7 @@ admin.initializeApp();
 
 import {adminProjectService} from "./services/adminProjectService";
 import { autoRefreshIfNeeded } from "./services/adminSettingsService";
-import { autoExpireOverdueInvitations, syncInvitationsWithProjectWorkers } from "./services/adminProjectInvitationService";
+import { autoCancelEndedProjectInvitations, autoExpireOverdueInvitations, syncInvitationsWithProjectWorkers } from "./services/adminProjectInvitationService";
 
 
 /**
@@ -84,3 +84,19 @@ export const doSyncInvitations = functions.pubsub
     await syncInvitationsWithProjectWorkers();
     return null;
   });
+
+export const autoCancelEndedInvitations = functions.pubsub
+  .schedule("0 6 * * *") // runs daily at 6 AM (adjust as needed)
+  .timeZone("Asia/Singapore")
+  .onRun(async () => {
+    await autoCancelEndedProjectInvitations();
+    return null;
+  });
+
+/**
+ * 
+cd function   # or wherever your package.json for Cloud Functions is
+npm run build
+cd ..
+firebase deploy --only "functions:functions"
+ */

@@ -147,6 +147,7 @@ const WorkerProjectsPage = () => {
           invitations={invitations}
           loading={loadingInvitations}
           refreshInvitations={fetchInvitations}
+          user={user}
         />
       );
     }

@@ -157,3 +157,60 @@ export async function syncInvitationsWithProjectWorkers(): Promise<void> {
     `syncInvitationsWithProjectWorkers: Completed. Processed ${processedCount} invitation docs.`
   );
 }
+
+/**
+ * Auto-cancels invitations for which the associated project is already ended.
+ * For each invitation with status "pending", it reads the project.
+ * If the project’s status is "ended", then the invitation is updated:
+ *   - status is set to "cancelled"
+ *   - updatedAt is set to the current server timestamp
+ *   - cancelReason is set to "project expired"
+ */
+export async function autoCancelEndedProjectInvitations(): Promise<void> {
+  console.log("autoCancelEndedProjectInvitations: Starting...");
+
+  const invitationsRef = db.collection("projectInvitations");
+  // Query invitations with status "pending" (i.e. ongoing invitations)
+  const snapshot = await invitationsRef.where("status", "==", "pending").get();
+
+  if (snapshot.empty) {
+    console.log("autoCancelEndedProjectInvitations: No pending invitations found.");
+    return;
+  }
+
+  let processedCount = 0;
+  for (const docSnap of snapshot.docs) {
+    const invData = docSnap.data();
+    const projectId = invData.projectID;
+    const userId = invData.userID;
+
+    if (!projectId) {
+      console.warn(`autoCancelEndedProjectInvitations: Invitation ${docSnap.id} missing projectID; skipping.`);
+      continue;
+    }
+
+    // Get the project document
+    const projectRef = db.collection("projects").doc(projectId);
+    const projectSnap = await projectRef.get();
+    if (!projectSnap.exists) {
+      console.warn(`autoCancelEndedProjectInvitations: Project ${projectId} not found; skipping invitation ${docSnap.id}.`);
+      continue;
+    }
+
+    const projectData = projectSnap.data();
+    // Check if the project is ended
+    if (projectData && projectData.status === "ended") {
+      console.log(`autoCancelEndedProjectInvitations: Cancelling invitation ${docSnap.id} because project ${projectId} is ended.`);
+      await docSnap.ref.update({
+        status: "cancelled",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        cancelReason: "project expired"
+      });
+      processedCount++;
+    } else {
+      console.log(`autoCancelEndedProjectInvitations: Invitation ${docSnap.id} not cancelled (project status: ${projectData?.status}).`);
+    }
+  }
+
+  console.log(`autoCancelEndedProjectInvitations: Completed. Processed ${processedCount} invitations.`);
+}
