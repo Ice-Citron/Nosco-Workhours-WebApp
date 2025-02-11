@@ -7,7 +7,7 @@ import PaymentDetailsModal from '../../components/payments/PaymentDetailsModal';
 import PaymentTypeFilter from '../../components/payments/PaymentTypeFilter';
 import SelectDropdown from '../../components/common/SelectDropdown';
 import { PAYMENT_STATUSES } from '../../utils/constants';
-import { collection, doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from '../../firebase/firebase_config';
 
 const PaymentHistoryPage = () => {
@@ -18,20 +18,23 @@ const PaymentHistoryPage = () => {
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Filters
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
 
+  // Build status options from PAYMENT_STATUSES
   const statusOptions = [
     { value: 'all', label: 'All Statuses' },
-    ...Object.values(PAYMENT_STATUSES).map(status => ({
+    ...Object.values(PAYMENT_STATUSES).map((status) => ({
       value: status,
-      label: status.charAt(0).toUpperCase() + status.slice(1)
-    }))
+      label: status.charAt(0).toUpperCase() + status.slice(1),
+    })),
   ];
 
-  // Function to fetch project details
+  // Fetch a single project's details
   const fetchProjectDetails = async (projectId) => {
-    if (!projectId) return null;
+    if (!projectId) return null; // skip if empty or null
     try {
       const projectRef = doc(firestore, 'projects', projectId);
       const projectDoc = await getDoc(projectRef);
@@ -45,20 +48,18 @@ const PaymentHistoryPage = () => {
     }
   };
 
-  // Function to fetch expense details with better error handling
+  // Fetch a single expense's details
   const fetchExpenseDetails = async (expenseId) => {
     if (!expenseId) return null;
     try {
-      const expense = await expenseService.getExpenseById(expenseId);
-      return expense;
+      return await expenseService.getExpenseById(expenseId);
     } catch (error) {
-      // Log the error but don't let it break the app
       console.warn(`Could not fetch expense ${expenseId}:`, error.message);
       return {
         id: expenseId,
         status: 'Unknown',
         amount: 0,
-        error: 'Could not load expense details'
+        error: 'Could not load expense details',
       };
     }
   };
@@ -71,35 +72,38 @@ const PaymentHistoryPage = () => {
       { status: filterStatus, paymentType: filterType },
       async (newPayments) => {
         try {
-          // Collect unique project and expense IDs
-          const projectIds = [...new Set(newPayments.map(p => p.projectID).filter(Boolean))];
-          const expenseIds = [...new Set(newPayments
-            .filter(p => p.relatedExpenseID)
-            .map(p => p.relatedExpenseID)
-          )];
+          const projectIds = new Set();
+          const expenseIds = new Set();
+
+          for (const p of newPayments) {
+            // Accumulate project IDs if present (and not empty string)
+            if (p.projectID) {
+              projectIds.add(p.projectID);
+            }
+            // Collect from relatedExpenseIDs array
+            if (Array.isArray(p.relatedExpenseIDs)) {
+              p.relatedExpenseIDs.forEach((eid) => expenseIds.add(eid));
+            }
+          }
 
           // Fetch project details
-          const projectDetails = {};
+          const projectDetails = { ...projects };
           await Promise.all(
-            projectIds.map(async (id) => {
-              try {
+            [...projectIds].map(async (id) => {
+              if (!projectDetails[id]) {
                 const project = await fetchProjectDetails(id);
                 if (project) projectDetails[id] = project;
-              } catch (error) {
-                console.warn(`Failed to fetch project ${id}:`, error);
               }
             })
           );
 
-          // Fetch expense details with error handling
-          const expenseDetails = {};
+          // Fetch expense details
+          const expenseDetails = { ...expenses };
           await Promise.all(
-            expenseIds.map(async (id) => {
-              try {
-                const expense = await fetchExpenseDetails(id);
-                if (expense) expenseDetails[id] = expense;
-              } catch (error) {
-                console.warn(`Failed to fetch expense ${id}:`, error);
+            [...expenseIds].map(async (id) => {
+              if (!expenseDetails[id]) {
+                const exp = await fetchExpenseDetails(id);
+                if (exp) expenseDetails[id] = exp;
               }
             })
           );
@@ -116,32 +120,31 @@ const PaymentHistoryPage = () => {
     );
 
     return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, filterStatus, filterType]);
 
+  // On row click => fetch full payment details again + show modal
   const handleRowClick = async (payment) => {
     try {
       const paymentDetails = await paymentService.getPaymentDetails(payment.id);
-      
-      // Fetch related project and expense if they haven't been fetched yet
+
+      // If the payment has a project
       if (paymentDetails.projectID && !projects[paymentDetails.projectID]) {
-        try {
-          const project = await fetchProjectDetails(paymentDetails.projectID);
-          if (project) {
-            setProjects(prev => ({ ...prev, [paymentDetails.projectID]: project }));
-          }
-        } catch (error) {
-          console.warn('Error fetching project details:', error);
+        const proj = await fetchProjectDetails(paymentDetails.projectID);
+        if (proj) {
+          setProjects((prev) => ({ ...prev, [paymentDetails.projectID]: proj }));
         }
       }
 
-      if (paymentDetails.relatedExpenseID && !expenses[paymentDetails.relatedExpenseID]) {
-        try {
-          const expense = await fetchExpenseDetails(paymentDetails.relatedExpenseID);
-          if (expense) {
-            setExpenses(prev => ({ ...prev, [paymentDetails.relatedExpenseID]: expense }));
+      // If the payment has multiple expense references
+      if (Array.isArray(paymentDetails.relatedExpenseIDs)) {
+        for (const eid of paymentDetails.relatedExpenseIDs) {
+          if (!expenses[eid]) {
+            const exp = await fetchExpenseDetails(eid);
+            if (exp) {
+              setExpenses((prev) => ({ ...prev, [eid]: exp }));
+            }
           }
-        } catch (error) {
-          console.warn('Error fetching expense details:', error);
         }
       }
 
@@ -152,6 +155,7 @@ const PaymentHistoryPage = () => {
     }
   };
 
+  // Add a comment to the payment
   const handleAddComment = async (commentText) => {
     if (!commentText.trim() || !selectedPayment) return;
 
@@ -159,7 +163,7 @@ const PaymentHistoryPage = () => {
       await paymentService.addPaymentComment(selectedPayment.id, {
         text: commentText,
         userID: user.uid,
-        createdAt: new Date()
+        createdAt: new Date(),
       });
 
       const updatedPayment = await paymentService.getPaymentDetails(selectedPayment.id);
@@ -177,6 +181,7 @@ const PaymentHistoryPage = () => {
         </div>
 
         <div className="p-6">
+          {/* Filters: Status + Payment Type */}
           <div className="flex gap-4 mb-6">
             <div className="w-48">
               <SelectDropdown
@@ -206,8 +211,12 @@ const PaymentHistoryPage = () => {
 
       <PaymentDetailsModal
         payment={selectedPayment}
-        project={selectedPayment ? projects[selectedPayment.projectID] : null}
-        expense={selectedPayment ? expenses[selectedPayment.relatedExpenseID] : null}
+        project={
+          selectedPayment && selectedPayment.projectID
+            ? projects[selectedPayment.projectID]
+            : null
+        }
+        expenseDictionary={expenses} // pass all expenses here
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onCommentAdd={handleAddComment}
