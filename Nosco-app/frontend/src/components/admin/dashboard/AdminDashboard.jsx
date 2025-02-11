@@ -19,6 +19,7 @@ const AdminDashboard = ({ metrics }) => {
     { title: "Analytics", path: "/admin/analytics" },
     { title: "Reports", path: "/admin/reports" },
     { title: "Notifications", path: "/admin/notifications" },
+    { title: "Profile", path: "/admin/profile" },
     { title: "Settings", path: "/admin/settings" },
   ];
 

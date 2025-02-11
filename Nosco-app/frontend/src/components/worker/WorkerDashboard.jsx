@@ -51,7 +51,9 @@ const WorkerDashboard = () => {
     { title: "Expenses", path: "/worker/expenses" },
     { title: "Payments", path: "/worker/payments" },
     { title: "Notifications", path: "/worker/notifications" },
-    { title: "Feedback", path: "/worker/feedback" },
+    // { title: "Feedback", path: "/worker/feedback" },
+    { title: "Profile", path: "/worker/profile" },
+    { title: "Settings", path: "/worker/settings" },
   ];
 
   if (loading) {

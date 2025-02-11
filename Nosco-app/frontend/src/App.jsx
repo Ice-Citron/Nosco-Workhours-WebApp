@@ -12,7 +12,7 @@ import WorkerDashboardPage from './pages/worker/WorkerDashboardPage';
 import SubmitExpensePage from './pages/worker/SubmitExpensePage';
 import LogHoursPage from './pages/worker/LogHoursPage';
 import ReportsPage from './pages/admin/AdminReportsPage';
-import ProfilePage from './pages/worker/ProfilePage';
+import WorkerProfilePage from './pages/worker/WorkerProfilePage';
 import SettingsPage from './pages/worker/SettingsPage';
 import ErrorPage from './pages/ErrorPage';
 import LoadingPage from './pages/LoadingPage';
@@ -50,6 +50,7 @@ import AdminProfilePage from './pages/admin/AdminProfilePage';
 
 import WorkerProjectsPage from './pages/worker/WorkerProjectsPage';
 import WorkerProjectDetailPage from './pages/worker/WorkerProjectDetailPage';
+import WorkerSettingsPage from './pages/worker/WorkerSettingsPage';
 
 
 const AuthenticatedApp = () => {
@@ -71,7 +72,8 @@ const AuthenticatedApp = () => {
         {/* Worker Routes */}
         <Route path="/worker" element={<WorkerLayout />}>
           <Route path="/worker/dashboard" element={<ProtectedRoute><WorkerDashboardPage /></ProtectedRoute>} />
-          <Route path="/worker/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+          <Route path="/worker/profile" element={<ProtectedRoute><WorkerProfilePage /></ProtectedRoute>} />
+          <Route path="/worker/settings" element={<ProtectedRoute><WorkerSettingsPage /></ProtectedRoute>} />
           <Route path="/worker/submit-expense" element={<ProtectedRoute><SubmitExpensePage /></ProtectedRoute>} />
           <Route path="/worker/log-work-hours" element={<ProtectedRoute><LogHoursPage /></ProtectedRoute>} />
                   {/* Work Hours Routes */}
@@ -88,7 +90,7 @@ const AuthenticatedApp = () => {
           </Route>
           <Route path="/worker/payments" element={<ProtectedRoute><PaymentHistoryPage /></ProtectedRoute>} />
           <Route path="/worker/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
-          <Route path="/worker/feedback" element={<ProtectedRoute><FeedbackPage /></ProtectedRoute>} />
+          { /* <Route path="/worker/feedback" element={<ProtectedRoute><FeedbackPage /></ProtectedRoute>} /> */}
           <Route path="/worker/projects" element={<ProtectedRoute><WorkerProjectsPage /></ProtectedRoute>} />
           <Route path="/worker/projects/:projectId/details" element={<ProtectedRoute><WorkerProjectDetailPage /></ProtectedRoute>} />
         </Route>
