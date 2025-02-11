@@ -49,6 +49,8 @@ import AdminAnalyticsPage from './pages/admin/AdminAnalyticsPage';
 import AdminProfilePage from './pages/admin/AdminProfilePage';
 
 import WorkerProjectsPage from './pages/worker/WorkerProjectsPage';
+import WorkerProjectDetailPage from './pages/worker/WorkerProjectDetailPage';
+
 
 const AuthenticatedApp = () => {
   const { loading } = useAuth();
@@ -88,6 +90,7 @@ const AuthenticatedApp = () => {
           <Route path="/worker/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
           <Route path="/worker/feedback" element={<ProtectedRoute><FeedbackPage /></ProtectedRoute>} />
           <Route path="/worker/projects" element={<ProtectedRoute><WorkerProjectsPage /></ProtectedRoute>} />
+          <Route path="/worker/projects/:projectId/details" element={<ProtectedRoute><WorkerProjectDetailPage /></ProtectedRoute>} />
         </Route>
         
 

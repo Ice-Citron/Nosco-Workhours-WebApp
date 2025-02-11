@@ -1,5 +1,6 @@
-import React from 'react';
-import { format } from 'date-fns';
+// src/components/worker/WorkerProjectInvitations.jsx
+import React, { useState } from 'react';
+import { format, parseISO } from 'date-fns';
 import {
   acceptProjectInvitation,
   declineProjectInvitation
@@ -8,10 +9,14 @@ import {
 console.log("WorkerProjectInvitations component loaded");
 
 const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations, user }) => {
+  const [subTab, setSubTab] = useState('pending'); // 'pending' or 'historical'
+  const [historicalStatusFilter, setHistoricalStatusFilter] = useState('all');
+  // 'all', 'accepted', 'rejected', 'cancelled'
+  const [startFilter, setStartFilter] = useState('');
+  const [endFilter, setEndFilter] = useState('');
+
   const handleAccept = async (invitationId) => {
     try {
-      console.log("handleAccept called for invitationId:", invitationId, "with user:", user.uid);
-      // Pass the worker’s UID
       await acceptProjectInvitation(invitationId, user.uid);
       refreshInvitations();
     } catch (error) {
@@ -21,10 +26,8 @@ const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations, us
 
   const handleReject = async (invitationId) => {
     try {
-      console.log("handleReject called for invitationId:", invitationId, "with user:", user.uid);
-      const reason = prompt("Enter the reason for rejecting this invitation:");
+      const reason = prompt('Enter the reason for rejecting this invitation:');
       if (!reason) return;
-      // Pass the worker’s UID
       await declineProjectInvitation(invitationId, user.uid, reason);
       refreshInvitations();
     } catch (error) {
@@ -33,56 +36,182 @@ const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations, us
   };
 
   if (loading) {
-    console.log("WorkerProjectInvitations: Loading invitations...");
     return <div>Loading invitations...</div>;
   }
 
   if (!invitations || invitations.length === 0) {
-    console.log("WorkerProjectInvitations: No invitations found.");
     return <div className="text-gray-500 text-center">No invitations found.</div>;
   }
 
+  // Filter out pending invitations
+  const pendingInvitations = invitations.filter(
+    (inv) => inv.status?.toLowerCase() === 'pending'
+  );
+
+  // Filter historical invitations by status in [accepted, rejected, cancelled]
+  let historicalInvitations = invitations.filter((inv) => {
+    const s = inv.status?.toLowerCase() || '';
+    return ['accepted', 'rejected', 'cancelled'].includes(s);
+  });
+
+  // Apply status filter if not "all"
+  if (historicalStatusFilter !== 'all') {
+    historicalInvitations = historicalInvitations.filter(
+      (inv) => inv.status?.toLowerCase() === historicalStatusFilter
+    );
+  }
+
+  // Apply date range filter (using project's start date)
+  if (subTab === 'historical') {
+    let fromDate = startFilter ? parseISO(startFilter) : null;
+    let toDate = endFilter ? parseISO(endFilter) : null;
+
+    historicalInvitations = historicalInvitations.filter((inv) => {
+      const projStartDate = inv.project?.startDate?.toDate?.();
+      if (!projStartDate) return false;
+      if (fromDate && projStartDate < fromDate) return false;
+      if (toDate && projStartDate > toDate) return false;
+      return true;
+    });
+  }
+
   return (
-    <div className="space-y-4">
-      {invitations.map((invitation) => (
-        <div key={invitation.id} className="border p-4 rounded shadow-sm">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-xl font-semibold">
-                {invitation.project?.name || 'Project Invitation'}
-              </h3>
-              <p className="text-gray-600">{invitation.message}</p>
-              <p className="text-sm text-gray-500">
-                Invited on:{' '}
-                {invitation.createdAt
-                  ? format(new Date(invitation.createdAt.seconds * 1000), 'MMM d, yyyy')
-                  : '-'}
-              </p>
-            </div>
-            {invitation.status.toLowerCase() === 'pending' ? (
-              <div className="space-x-2">
-                <button
-                  onClick={() => handleAccept(invitation.id)}
-                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={() => handleReject(invitation.id)}
-                  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
-                >
-                  Reject
-                </button>
-              </div>
-            ) : (
-              <span className="px-3 py-1 rounded-full text-sm font-medium text-gray-700 border">
-                {invitation.status.charAt(0).toUpperCase() +
-                  invitation.status.slice(1)}
-              </span>
-            )}
+    <div>
+      {/* Sub-Tab Navigation */}
+      <div className="flex space-x-4 border-b mb-4">
+        <button
+          onClick={() => setSubTab('pending')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            subTab === 'pending'
+              ? 'border-nosco-red text-nosco-red'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Pending
+        </button>
+        <button
+          onClick={() => setSubTab('historical')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            subTab === 'historical'
+              ? 'border-nosco-red text-nosco-red'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Historical
+        </button>
+      </div>
+
+      {/* Historical Tab Filter Controls: Status & Date Range (horizontal row) */}
+      {subTab === 'historical' && (
+        <div className="mb-4 flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-gray-600">Status Filter:</label>
+            <select
+              value={historicalStatusFilter}
+              onChange={(e) => setHistoricalStatusFilter(e.target.value)}
+              className="border border-gray-300 rounded px-2 py-1 text-sm"
+            >
+              <option value="all">All</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-gray-600">From:</label>
+            <input
+              type="date"
+              className="border border-gray-300 rounded px-2 py-1 text-sm"
+              value={startFilter}
+              onChange={(e) => setStartFilter(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <label className="text-sm text-gray-600">To:</label>
+            <input
+              type="date"
+              className="border border-gray-300 rounded px-2 py-1 text-sm"
+              value={endFilter}
+              onChange={(e) => setEndFilter(e.target.value)}
+            />
           </div>
         </div>
-      ))}
+      )}
+
+      {subTab === 'pending' ? (
+        pendingInvitations.length === 0 ? (
+          <div className="text-gray-500 text-center">No pending invitations.</div>
+        ) : (
+          <div className="space-y-4">
+            {pendingInvitations.map((inv) => (
+              <div key={inv.id} className="border p-4 rounded shadow-sm">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-xl font-semibold">
+                      {inv.project?.name || 'Project Invitation'}
+                    </h3>
+                    <p className="text-gray-600">{inv.message}</p>
+                    <p className="text-sm text-gray-500">
+                      Invited on:{' '}
+                      {inv.createdAt
+                        ? format(new Date(inv.createdAt.seconds * 1000), 'MMM d, yyyy')
+                        : '-'}
+                    </p>
+                  </div>
+                  <div className="space-x-2">
+                    <button
+                      onClick={() => handleAccept(inv.id)}
+                      className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => handleReject(inv.id)}
+                      className="bg-nosco-red hover:bg-nosco-red-dark text-white px-3 py-1 rounded"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        historicalInvitations.length === 0 ? (
+          <div className="text-gray-500 text-center">
+            No historical invitations found.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {historicalInvitations.map((inv) => (
+              <div key={inv.id} className="border p-4 rounded shadow-sm">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-xl font-semibold">
+                      {inv.project?.name || 'Project Invitation'}
+                    </h3>
+                    <p className="text-gray-600">{inv.message}</p>
+                    <p className="text-sm text-gray-500">
+                      Invited on:{' '}
+                      {inv.createdAt
+                        ? format(new Date(inv.createdAt.seconds * 1000), 'MMM d, yyyy')
+                        : '-'}
+                    </p>
+                    <p className="text-sm text-gray-500">Status: {inv.status}</p>
+                    <p className="text-sm text-gray-500">
+                      Start Date:{' '}
+                      {inv.project?.startDate
+                        ? format(inv.project.startDate.toDate(), 'MMM d, yyyy')
+                        : '-'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
     </div>
   );
 };
