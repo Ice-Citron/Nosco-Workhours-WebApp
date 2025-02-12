@@ -7,6 +7,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+.DS_Store
+
 # C extensions
 *.so
 
@@ -165,3 +167,5 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 Nosco-app/frontend/src/firebase/nosco-app-b5be4-firebase-adminsdk-c0kb0-7a2b7f7df2.json
+.DS_Store
+.DS_Store

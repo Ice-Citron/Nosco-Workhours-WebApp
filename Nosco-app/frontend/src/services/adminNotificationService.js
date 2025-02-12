@@ -272,7 +272,7 @@ export const adminNotificationService = {
       entityType: 'project_invitation',
       link
     };
-    return await this.createNotificationForAllAdmins(notificationData);
+    return await adminNotificationService.createNotificationForAllAdmins(notificationData);
   },
 
   notifyAllAdminsInvitationNudged: async (invitationId, workerName, projectName) => {
@@ -285,7 +285,7 @@ export const adminNotificationService = {
       entityType: 'project_invitation',
       link
     };
-    return await this.createNotificationForAllAdmins(notificationData);
+    return await adminNotificationService.createNotificationForAllAdmins(notificationData);
   },
 };
 
