@@ -1,26 +1,22 @@
 /* eslint-disable max-len */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * If you want to keep JSDoc strictly enforced, do not disable the rules below.
- * Instead, fix each warning. But for now, we'll disable them to pass your lint.
+ * adminProjectService.ts
+ *
+ * A server-side version of your project logic using the Admin SDK.
+ * You asked to “notify all admins whenever a project is started/ended/archived”.
+ * So we do that via the `notifyAdminsOfProjectEvent()` helper below.
  */
 
 import * as admin from "firebase-admin";
-import {Firestore} from "firebase-admin/firestore";
+import { Firestore } from "firebase-admin/firestore";
 
-/**
- * Our Firestore reference using the Admin SDK.
- */
 const db: Firestore = admin.firestore();
 
-/**
- * Data shape for creating/updating a project.
- * This interface helps TypeScript know what fields exist on your docs.
- */
 interface ProjectData {
   id?: string;
   name?: string;
-  status?: string; // e.g. "draft","active","ended","archived"
+  status?: string; // "draft","active","ended","archived"
   startDate?: admin.firestore.Timestamp;
   endDate?: admin.firestore.Timestamp;
   createdAt?: admin.firestore.Timestamp;
@@ -31,9 +27,8 @@ interface ProjectData {
   unarchiveDate?: admin.firestore.Timestamp;
 }
 
-/**
- * Returns an array of admin user docs with id + optional name.
- * @returns {Promise<Array<{ id: string; name?: string }>>} The list of admin users
+/** 
+ * Helper to get all admins from 'users' collection whose role=='admin'
  */
 async function getAllAdmins(): Promise<Array<{ id: string; name?: string }>> {
   const snapshot = await db.collection("users")
@@ -42,17 +37,15 @@ async function getAllAdmins(): Promise<Array<{ id: string; name?: string }>> {
 
   const admins: Array<{ id: string; name?: string }> = [];
   snapshot.forEach((docSnap) => {
-    admins.push({id: docSnap.id, ...(docSnap.data() as any)});
+    admins.push({ id: docSnap.id, ...(docSnap.data() as any) });
   });
   return admins;
 }
 
 /**
- * Creates notifications for all admins, each doc referencing the project event.
- * @param {string} eventType - e.g. "created", "started", "ended"
- * @param {string} projectId - the Firestore doc ID of the project
- * @param {string} projectName - the project's name
- * @return {Promise<void>} A promise that resolves when notifications are created
+ * notifyAdminsOfProjectEvent:
+ *  - For each admin, create a notification doc about a project event
+ *  - e.g. "project_started", "project_ended", "project_archived"
  */
 async function notifyAdminsOfProjectEvent(
   eventType: string,
@@ -66,66 +59,63 @@ async function notifyAdminsOfProjectEvent(
   let message = `Project "${projectName}" changed status.`;
 
   switch (eventType) {
-  case "created":
-    type = "project_created";
-    title = "Project Created";
-    message = `Project "${projectName}" was created.`;
-    break;
-  case "started":
-    type = "project_started";
-    title = "Project Started";
-    message = `Project "${projectName}" is now active.`;
-    break;
-  case "ended":
-    type = "project_ended";
-    title = "Project Ended";
-    message = `Project "${projectName}" has ended.`;
-    break;
-  case "archived":
-    type = "project_archived";
-    title = "Project Archived";
-    message = `Project "${projectName}" was archived.`;
-    break;
-  case "unarchived":
-    type = "project_unarchived";
-    title = "Project Unarchived";
-    message = `Project "${projectName}" was unarchived.`;
-    break;
-  default:
-    break;
+    case "created":
+      type = "project_created";
+      title = "Project Created";
+      message = `Project "${projectName}" was created.`;
+      break;
+    case "started":
+      type = "project_started";
+      title = "Project Started";
+      message = `Project "${projectName}" is now active.`;
+      break;
+    case "ended":
+      type = "project_ended";
+      title = "Project Ended";
+      message = `Project "${projectName}" has ended.`;
+      break;
+    case "archived":
+      type = "project_archived";
+      title = "Project Archived";
+      message = `Project "${projectName}" was archived.`;
+      break;
+    case "unarchived":
+      type = "project_unarchived";
+      title = "Project Unarchived";
+      message = `Project "${projectName}" was unarchived.`;
+      break;
+    default:
+      break;
   }
 
-  for (const adminObj of admins) {
-    const notificationDoc = {
+  for (const adminUser of admins) {
+    await db.collection("notifications").add({
       type,
       title,
       message,
       entityType: "project",
       entityID: projectId,
       link: `/admin/projects/${projectId}`,
-      userID: adminObj.id,
+      userID: adminUser.id,
       read: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    await db.collection("notifications").add(notificationDoc);
+    });
   }
 }
 
 /**
- * A server-side version of your project logic using the Admin SDK.
+ * The adminProjectService object with your standard methods.
  */
 export const adminProjectService = {
   /**
-   * @return {Promise<ProjectData[]>} List of all projects from "projects" collection
+   * Return all projects from 'projects' collection
    */
   async getProjects(): Promise<ProjectData[]> {
     try {
       const snapshot = await db.collection("projects").get();
       const projects: ProjectData[] = [];
-
       snapshot.forEach((docSnap) => {
-        projects.push({id: docSnap.id, ...docSnap.data()} as ProjectData);
+        projects.push({ id: docSnap.id, ...docSnap.data() } as ProjectData);
       });
       return projects;
     } catch (error) {
@@ -135,9 +125,7 @@ export const adminProjectService = {
   },
 
   /**
-   * Create a new project doc with status="draft" and notify admins.
-   * @param {ProjectData} projectData - object with name, start/end dates, etc.
-   * @returns {Promise<{ id: string, [key: string]: any }>} newly created project data
+   * Create new project with status='draft', notify admin=created
    */
   async createProject(projectData: ProjectData): Promise<{ id: string; [key: string]: any }> {
     try {
@@ -148,10 +136,10 @@ export const adminProjectService = {
         startDate: projectData.startDate || admin.firestore.Timestamp.now(),
         endDate: projectData.endDate || admin.firestore.Timestamp.now(),
       };
-
       const docRef = await db.collection("projects").add(newProject);
+
       await notifyAdminsOfProjectEvent("created", docRef.id, newProject.name || "Unknown");
-      return {id: docRef.id, ...newProject};
+      return { id: docRef.id, ...newProject };
     } catch (err) {
       console.error("Error creating project:", err);
       throw err;
@@ -159,18 +147,14 @@ export const adminProjectService = {
   },
 
   /**
-   * Update a project's status. If "active" => notify 'started'; if "ended" => notify 'ended'.
-   * @param {string} projectId Firestore doc ID
-   * @param {string} status new status (e.g. "active", "ended")
-   * @return {Promise<void>} resolves when status is updated & notifications sent
+   * Update project status
+   * If "active" => event='started', if "ended" => event='ended', etc.
    */
   async updateProjectStatus(projectId: string, status: string): Promise<void> {
     try {
       const projectRef = db.collection("projects").doc(projectId);
       const snap = await projectRef.get();
-      if (!snap.exists) {
-        throw new Error("Project not found");
-      }
+      if (!snap.exists) throw new Error("Project not found");
       const projData = snap.data() as ProjectData;
 
       await projectRef.update({
@@ -190,18 +174,16 @@ export const adminProjectService = {
   },
 
   /**
-   * Get full details for a single project doc by ID.
-   * @param {string} projectId Firestore doc ID
-   * @return {Promise<ProjectData>} The project doc data
+   * Get project doc by ID
    */
   async getProjectDetails(projectId: string): Promise<ProjectData> {
     try {
-      const projectRef = db.collection("projects").doc(projectId);
-      const snap = await projectRef.get();
+      const ref = db.collection("projects").doc(projectId);
+      const snap = await ref.get();
       if (!snap.exists) {
         throw new Error("Project not found");
       }
-      return {id: snap.id, ...(snap.data() as ProjectData)};
+      return { id: snap.id, ...(snap.data() as ProjectData) };
     } catch (err) {
       console.error("Error fetching project details:", err);
       throw err;
@@ -209,15 +191,12 @@ export const adminProjectService = {
   },
 
   /**
-   * Partially update a project's doc fields.
-   * @param {string} projectId Firestore doc ID
-   * @param {Partial<ProjectData>} data fields to update
-   * @return {Promise<void>} resolves when updated
+   * Partially update project doc fields
    */
   async updateProject(projectId: string, data: Partial<ProjectData>): Promise<void> {
     try {
-      const projectRef = db.collection("projects").doc(projectId);
-      await projectRef.update({
+      const ref = db.collection("projects").doc(projectId);
+      await ref.update({
         ...data,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -228,9 +207,7 @@ export const adminProjectService = {
   },
 
   /**
-   * Set a project to "ended" and notify admins.
-   * @param {string} projectId Firestore doc ID
-   * @return {Promise<void>} resolves when ended
+   * set project to "ended", notify=ended
    */
   async endProject(projectId: string): Promise<void> {
     try {
@@ -253,9 +230,7 @@ export const adminProjectService = {
   },
 
   /**
-   * Archive a project by storing status="archived", plus previousStatus, etc.
-   * @param {string} projectId Firestore doc ID
-   * @return {Promise<void>} resolves when archived
+   * archive project => status='archived', notify=archived
    */
   async archiveProject(projectId: string): Promise<void> {
     try {
@@ -281,9 +256,7 @@ export const adminProjectService = {
   },
 
   /**
-   * Unarchive a project by reverting to previousStatus and notifying admins.
-   * @param {string} projectId Firestore doc ID
-   * @return {Promise<void>} resolves when unarchived
+   * unarchive => revert to previousStatus, notify=unarchived
    */
   async unarchiveProject(projectId: string): Promise<void> {
     try {
@@ -308,9 +281,7 @@ export const adminProjectService = {
   },
 
   /**
-   * Delete a project doc entirely.
-   * @param {string} projectId Firestore doc ID
-   * @return {Promise<void>} resolves when deleted
+   * Delete doc entirely (no event to admins for this unless you want to add it).
    */
   async deleteProject(projectId: string): Promise<void> {
     try {
@@ -322,10 +293,7 @@ export const adminProjectService = {
   },
 
   /**
-   * Assign a worker to a project in "projectAssignments".
-   * @param {string} projectId Firestore doc ID
-   * @param {string} workerId user doc ID
-   * @return {Promise<void>} resolves when assigned
+   * Optionally assign a worker => "projectAssignments" doc
    */
   async assignWorkerToProject(projectId: string, workerId: string): Promise<void> {
     try {
@@ -337,15 +305,13 @@ export const adminProjectService = {
       };
       await db.collection("projectAssignments").add(assignment);
     } catch (err) {
-      console.error("Error assigning worker to project:", err);
+      console.error("Error assigning worker:", err);
       throw err;
     }
   },
 
   /**
-   * Remove a worker from a project by setting "removed" in projectAssignments.
-   * @param {string} assignmentId doc ID in "projectAssignments"
-   * @return {Promise<void>} resolves when removed
+   * Remove worker => set "removed" in projectAssignments
    */
   async removeWorkerFromProject(assignmentId: string): Promise<void> {
     try {
@@ -355,7 +321,7 @@ export const adminProjectService = {
         removedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } catch (err) {
-      console.error("Error removing worker from project:", err);
+      console.error("Error removing worker:", err);
       throw err;
     }
   },

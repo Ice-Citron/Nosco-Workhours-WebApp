@@ -93,6 +93,42 @@ export const autoCancelEndedInvitations = functions.pubsub
     return null;
   });
 
+export const cleanupOldNotifications = functions.pubsub
+  .schedule("0 7 * * *") // runs every day at 7 AM, for example
+  .timeZone("Asia/Singapore")
+  .onRun(async () => {
+    console.log("Running cleanupOldNotifications...");
+
+    const now = Date.now();
+    // 14 days in milliseconds
+    const cutoff = now - (14 * 24 * 60 * 60 * 1000);
+
+    // We'll query notifications where createdAt < cutoff
+    // (Assuming createdAt is a Firestore timestamp)
+    const cutoffTimestamp = admin.firestore.Timestamp.fromMillis(cutoff);
+
+    const notificationsRef = admin.firestore().collection("notifications");
+    const oldSnap = await notificationsRef
+      .where("createdAt", "<", cutoffTimestamp)
+      .get();
+
+    if (oldSnap.empty) {
+      console.log("No old notifications to delete.");
+      return;
+    }
+
+    let deleteCount = 0;
+    // batch or sequentially delete
+    const batch = admin.firestore().batch();
+    oldSnap.docs.forEach(doc => {
+      batch.delete(doc.ref);
+      deleteCount++;
+    });
+    await batch.commit();
+
+    console.log(`cleanupOldNotifications: Deleted ${deleteCount} old notifications.`);
+  });
+
 /**
  * 
 cd function   # or wherever your package.json for Cloud Functions is
