@@ -1,4 +1,4 @@
-// File: src/services/workerProjectInvitationService.js
+// src/services/workerProjectInvitationService.js
 
 import { firestore as db } from '../firebase/firebase_config';
 import {
@@ -9,16 +9,46 @@ import {
   getDocs,
   doc,
   updateDoc,
-  serverTimestamp,
-  addDoc,
   getDoc,
   arrayUnion,
+  serverTimestamp,
   Timestamp
 } from 'firebase/firestore';
+import workerNotificationService from './workerNotificationService';
 
 /**
- * Optionally fetch project details if you want to enrich the data.
- * Otherwise, you can skip this if you don't need the project info in your worker UI.
+ * If you want the worker to actually join the project,
+ * you'll need to update the project doc's "workers" map, similar to how
+ * admin code does it. Let's replicate a mini version of syncProjectWorkersMap:
+ */
+async function syncProjectWorkersMap(invitation, newStatus) {
+  const projectRef = doc(db, 'projects', invitation.projectID);
+  const projectSnap = await getDoc(projectRef);
+  if (!projectSnap.exists()) {
+    console.warn('[syncProjectWorkersMap] Project not found:', invitation.projectID);
+    return;
+  }
+  const projectData = projectSnap.data() || {};
+  const workersMap = projectData.workers || {};
+  const userId = invitation.userID;
+
+  if (newStatus === 'accepted') {
+    // add worker
+    workersMap[userId] = {
+      status: 'active',
+      joinedAt: Timestamp.now()
+    };
+  } else if (newStatus === 'rejected') {
+    // remove worker if present
+    if (workersMap[userId]) {
+      delete workersMap[userId];
+    }
+  }
+  await updateDoc(projectRef, { workers: workersMap });
+}
+
+/**
+ * Optionally fetch project details if you want to show them in worker UI
  */
 export const getProjectDetails = async (projectID) => {
   try {
@@ -50,7 +80,7 @@ export const getWorkerProjectInvitations = async (userId) => {
     const invitations = [];
     for (const docSnap of snapshot.docs) {
       const data = docSnap.data();
-      // If you want to fetch project details, do so here:
+      // If you want the project details:
       const project = await getProjectDetails(data.projectID);
       invitations.push({
         id: docSnap.id,
@@ -66,80 +96,121 @@ export const getWorkerProjectInvitations = async (userId) => {
 };
 
 /**
- * updateInvitationStatus
- * - Sets the invitation's "status" and "responseDate".
- * - Appends an attempt to the "attempts" array (e.g. { type: 'accepted', date, by })
- * - Creates a notification with userID == worker's UID
+ * Accept an invitation => set status = 'accepted'
+ * Then notify all admins (no worker notification).
  */
-export const updateInvitationStatus = async (
-  invitationId,
-  newStatus,    // "accepted" or "rejected"
-  userId,
-  extraFields = {}
-) => {
-  if (!userId) {
-    throw new Error('userId is required to update the invitation');
-  }
+export const acceptProjectInvitation = async (invitationId, userId) => {
   try {
+    // 1) fetch invitation doc
     const invitationRef = doc(db, 'projectInvitations', invitationId);
+    const snap = await getDoc(invitationRef);
+    if (!snap.exists()) {
+      throw new Error('Invitation not found');
+    }
+    const invitation = snap.data();
 
-    // Build an attempt object
+    if (invitation.status !== 'pending') {
+      throw new Error('Can only accept a pending invitation');
+    }
+    if (invitation.userID !== userId) {
+      throw new Error('You are not the owner of this invitation');
+    }
+
+    // 2) update doc
     const attempt = {
       date: Timestamp.now(),
       by: userId,
-      type: newStatus // e.g. "accepted", "rejected"
+      type: 'accepted'
     };
-
-    // Prepare the update data
-    const updateData = {
-      status: newStatus,
+    await updateDoc(invitationRef, {
+      status: 'accepted',
       responseDate: serverTimestamp(),
       attempts: arrayUnion(attempt),
-      ...extraFields
-    };
+      // remove declineReason if any
+      declineReason: null
+    });
 
-    await updateDoc(invitationRef, updateData);
+    // 3) sync with project doc
+    await syncProjectWorkersMap({ ...invitation, id: invitationId }, 'accepted');
 
-    // Create a notification for the worker
-    const notificationsRef = collection(db, 'notifications');
-    const notification = {
-      type: 'projectInvitation',
-      title: `Project Invitation ${newStatus}`,
-      message: `Worker has ${newStatus} the invitation.`,
-      entityID: invitationId,
-      entityType: 'projectInvitation',
-      userID: userId, // must match the worker's UID for your rules
-      createdAt: serverTimestamp(),
-      read: false
-    };
-    await addDoc(notificationsRef, notification);
+    // 4) notify all admins
+    // fetch worker & project name for better admin message
+    const userSnap = await getDoc(doc(db, 'users', userId));
+    const workerName = userSnap.exists() ? userSnap.data().name : 'Unknown Worker';
+
+    const projectSnap = await getDoc(doc(db, 'projects', invitation.projectID));
+    const projectName = projectSnap.exists() ? projectSnap.data().name : 'Unknown Project';
+
+    await workerNotificationService.notifyAllAdminsInvitationAccepted(
+      invitationId,
+      workerName,
+      projectName
+    );
 
     return true;
   } catch (error) {
-    console.error('Error updating invitation status:', error);
+    console.error('Error accepting invitation:', error);
     throw error;
   }
 };
 
 /**
- * Accepts an invitation
- * - sets status = 'accepted'
- * - logs an attempt in attempts[]
- */
-export const acceptProjectInvitation = async (invitationId, userId) => {
-  return updateInvitationStatus(invitationId, 'accepted', userId);
-};
-
-/**
- * Declines an invitation
- * - sets status = 'rejected'
- * - logs an attempt in attempts[]
- * - includes declineReason if provided
+ * Decline an invitation => set status = 'rejected'
+ * Then notify all admins (no worker notification).
  */
 export const declineProjectInvitation = async (invitationId, userId, declineReason) => {
-  return updateInvitationStatus(invitationId, 'rejected', userId, {
-    declineReason
-  });
+  try {
+    // 1) fetch invitation doc
+    const invitationRef = doc(db, 'projectInvitations', invitationId);
+    const snap = await getDoc(invitationRef);
+    if (!snap.exists()) {
+      throw new Error('Invitation not found');
+    }
+    const invitation = snap.data();
+
+    if (invitation.status !== 'pending') {
+      throw new Error('Can only reject a pending invitation');
+    }
+    if (invitation.userID !== userId) {
+      throw new Error('You are not the owner of this invitation');
+    }
+
+    // 2) update doc
+    const attempt = {
+      date: Timestamp.now(),
+      by: userId,
+      type: 'rejected'
+    };
+    await updateDoc(invitationRef, {
+      status: 'rejected',
+      responseDate: serverTimestamp(),
+      attempts: arrayUnion(attempt),
+      declineReason
+    });
+
+    // 3) remove from project doc if present
+    await syncProjectWorkersMap({ ...invitation, id: invitationId }, 'rejected');
+
+    // 4) notify all admins
+    // fetch worker & project name
+    const userSnap = await getDoc(doc(db, 'users', userId));
+    const workerName = userSnap.exists() ? userSnap.data().name : 'Unknown Worker';
+
+    const projectSnap = await getDoc(doc(db, 'projects', invitation.projectID));
+    const projectName = projectSnap.exists() ? projectSnap.data().name : 'Unknown Project';
+
+    await workerNotificationService.notifyAllAdminsInvitationRejected(
+      invitationId,
+      workerName,
+      projectName,
+      declineReason
+    );
+
+    return true;
+  } catch (error) {
+    console.error('Error rejecting invitation:', error);
+    throw error;
+  }
 };
 
 export default {

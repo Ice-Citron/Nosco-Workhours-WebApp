@@ -17,53 +17,47 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import adminNotificationService from './adminNotificationService'; // Import your new notification file
 
 /**
- * Helper function: Updates the "workers" map inside the associated project doc
- * based on the new invitation status. 
- *   - If "accepted", add the user to the `workers` map.
- *   - If "cancelled" or "rejected", remove them from the `workers` map if present.
+ * Helper: updates the "workers" map inside the associated project doc
+ * if status changed to accepted/rejected/cancelled.
  */
 async function syncProjectWorkersMap(invitation, newStatus) {
-  // 1) Fetch the project doc
   const projectRef = doc(firestore, 'projects', invitation.projectID);
   const projectSnap = await getDoc(projectRef);
   if (!projectSnap.exists()) {
     console.warn('[syncProjectWorkersMap] Project not found:', invitation.projectID);
-    return; // or throw new Error('Project not found');
+    return;
   }
 
   const projectData = projectSnap.data() || {};
   const workersMap = projectData.workers || {};
-
   const userId = invitation.userID;
+
   if (newStatus === 'accepted') {
-    // Add/overwrite a worker entry
+    // Add or overwrite worker
     workersMap[userId] = {
       status: 'active',
       joinedAt: Timestamp.now()
-      // you can store more if you want
     };
     console.log(`[syncProjectWorkersMap] Added worker ${userId} to project ${invitation.projectID}`);
   } else if (newStatus === 'cancelled' || newStatus === 'rejected') {
-    // Remove worker from map if they exist
+    // Remove worker from map
     if (workersMap[userId]) {
       delete workersMap[userId];
       console.log(`[syncProjectWorkersMap] Removed worker ${userId} from project ${invitation.projectID}`);
     }
-    // If it was "pending," they might not be in the map yet, so no harm in trying.
   }
-
-  // 2) Update the project doc
   await updateDoc(projectRef, { workers: workersMap });
 }
 
 export const adminProjectInvitationService = {
-  // 1) Get all invitations for a project
+  /**
+   * Get all invitations for a project
+   */
   getProjectInvitations: async (projectId) => {
     try {
-      console.log('Fetching invitations for project:', projectId);
-
       const invitationsRef = collection(firestore, 'projectInvitations');
       const q = query(
         invitationsRef,
@@ -72,50 +66,51 @@ export const adminProjectInvitationService = {
       );
       const snapshot = await getDocs(q);
 
-      // Collect userIDs
+      // Collect userIDs to fetch user docs
       const userIds = new Set(snapshot.docs.map((docSnap) => docSnap.data().userID));
-
-      // For each userID, load user details
       const usersMap = new Map();
+
       for (const uid of userIds) {
         const userDoc = await getDoc(doc(firestore, 'users', uid));
         if (userDoc.exists()) {
-          usersMap.set(uid, {
-            id: uid,
-            ...userDoc.data()
-          });
+          usersMap.set(uid, { id: uid, ...userDoc.data() });
         }
       }
 
-      // Map invitations with user details
-      const invitationsWithUsers = snapshot.docs.map((docSnap) => {
-        const invitation = {
-          id: docSnap.id,
-          ...docSnap.data()
-        };
-        invitation.user = usersMap.get(invitation.userID) || null;
-        return invitation;
+      // Return invitations plus user object
+      return snapshot.docs.map((docSnap) => {
+        const inv = { id: docSnap.id, ...docSnap.data() };
+        inv.user = usersMap.get(inv.userID) || null;
+        return inv;
       });
-
-      return invitationsWithUsers;
     } catch (error) {
       console.error('Error fetching invitations:', error);
       throw error;
     }
   },
 
-  // 2) Create a new invitation
+  /**
+   * Create a new invitation (status = 'pending').
+   * 1) Create doc
+   * 2) Notify worker
+   * 3) Notify all admins
+   */
   createInvitation: async (projectId, userId, message) => {
     try {
-      console.log('[createInvitation] START', { projectId, userId, message });
-
-      // Check user doc
-      const userRef = doc(firestore, 'users', userId);
-      const userDocSnap = await getDoc(userRef);
-      if (!userDocSnap.exists()) {
+      // 1) Basic validation
+      const userSnap = await getDoc(doc(firestore, 'users', userId));
+      if (!userSnap.exists()) {
         throw new Error('User not found');
       }
+      const workerName = userSnap.data().name || 'Unknown Worker';
 
+      const projectSnap = await getDoc(doc(firestore, 'projects', projectId));
+      if (!projectSnap.exists()) {
+        throw new Error('Project not found');
+      }
+      const projectName = projectSnap.data().name || 'Unknown Project';
+
+      // 2) Create invitation doc
       const invitationData = {
         projectID: projectId,
         userID: userId,
@@ -130,14 +125,12 @@ export const adminProjectInvitationService = {
             type: 'initial'
           }
         ],
-        requiredResponseDate: Timestamp.fromDate(new Date(Date.now() + 7*24*60*60*1000))
+        requiredResponseDate: Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))
       };
-
       const docRef = await addDoc(collection(firestore, 'projectInvitations'), invitationData);
-      console.log('[createInvitation] Created invitation docId:', docRef.id);
 
-      // Notification
-      const notif = {
+      // 3) Notify the worker
+      await addDoc(collection(firestore, 'notifications'), {
         type: 'project_invitation',
         title: 'New Project Invitation',
         message: 'You have been invited to join a new project',
@@ -147,66 +140,35 @@ export const adminProjectInvitationService = {
         createdAt: serverTimestamp(),
         read: false,
         link: '/worker/project-invitations'
-      };
-      await addDoc(collection(firestore, 'notifications'), notif);
+      });
 
-      return { id: docRef.id, ...invitationData, user: userDocSnap.data() };
+      // 4) Notify all admins
+      await adminNotificationService.notifyAllAdminsInvitationCreated(
+        docRef.id,
+        workerName,
+        projectName
+      );
+
+      console.log('[createInvitation] Created invitation docId:', docRef.id);
+      return { id: docRef.id, ...invitationData, user: userSnap.data() };
     } catch (error) {
       console.error('[createInvitation] ERROR:', error);
       throw error;
     }
   },
 
-  // 3) Resend invitation (for pending invitations)
-  resendInvitation: async (invitationId) => {
-    try {
-      const invRef = doc(firestore, 'projectInvitations', invitationId);
-      const snap = await getDoc(invRef);
-      if (!snap.exists()) throw new Error('Invitation not found');
-      const invitation = snap.data();
-      if (invitation.status !== 'pending') {
-        throw new Error('Can only resend pending invitations');
-      }
-
-      const now = Timestamp.now();
-      await updateDoc(invRef, {
-        updatedAt: serverTimestamp(),
-        attempts: arrayUnion({
-          date: now,
-          by: getAuth().currentUser.uid,
-          type: 'resend'
-        }),
-        requiredResponseDate: Timestamp.fromDate(new Date(Date.now() + 7*24*60*60*1000))
-      });
-
-      // Notification
-      const notif = {
-        type: 'project_invitation_reminder',
-        title: 'Project Invitation Reminder',
-        message: 'You have a pending project invitation',
-        entityID: invitationId,
-        entityType: 'project_invitation',
-        userID: invitation.userID,
-        createdAt: serverTimestamp(),
-        read: false,
-        link: '/worker/project-invitations'
-      };
-      await addDoc(collection(firestore, 'notifications'), notif);
-
-      return true;
-    } catch (error) {
-      console.error('Error resending invitation:', error);
-      throw error;
-    }
-  },
-
-  // 4) Send nudge (for pending)
+  /**
+   * sendNudge (for pending)
+   * Notifying only the worker that there's a "nudge"
+   * (If you also want admins to see "nudge" events, you can call an admin notif function.)
+   */
   sendNudge: async (invitationId) => {
     try {
       const invRef = doc(firestore, 'projectInvitations', invitationId);
       const snap = await getDoc(invRef);
       if (!snap.exists()) throw new Error('Invitation not found');
       const invitation = snap.data();
+
       if (invitation.status !== 'pending') {
         throw new Error('Can only nudge pending invitations');
       }
@@ -222,8 +184,8 @@ export const adminProjectInvitationService = {
         updatedAt: serverTimestamp()
       });
 
-      // Notification
-      const notif = {
+      // 1) Worker notification
+      await addDoc(collection(firestore, 'notifications'), {
         type: 'project_invitation_nudge',
         title: 'Action Required: Project Invitation',
         message: 'Please respond to your pending project invitation',
@@ -233,8 +195,20 @@ export const adminProjectInvitationService = {
         createdAt: serverTimestamp(),
         read: false,
         link: '/worker/project-invitations'
-      };
-      await addDoc(collection(firestore, 'notifications'), notif);
+      });
+
+      // 2) Admin notification
+      // fetch worker & project names for better message
+      const userSnap = await getDoc(doc(firestore, 'users', invitation.userID));
+      const workerName = userSnap.exists() ? userSnap.data().name : 'Unknown Worker';
+      const projSnap = await getDoc(doc(firestore, 'projects', invitation.projectID));
+      const projectName = projSnap.exists() ? projSnap.data().name : 'Unknown Project';
+
+      await adminNotificationService.notifyAllAdminsInvitationNudged(
+        invitationId,
+        workerName,
+        projectName
+      );
 
       return true;
     } catch (error) {
@@ -243,7 +217,13 @@ export const adminProjectInvitationService = {
     }
   },
 
-  // 5) Cancel invitation (for pending or accepted)
+  /**
+   * cancelInvitation (for pending or accepted).
+   *  1) Set status='cancelled'
+   *  2) Remove from project doc
+   *  3) Notify worker
+   *  4) Notify all admins
+   */
   cancelInvitation: async (invitationId, reason) => {
     try {
       const invRef = doc(firestore, 'projectInvitations', invitationId);
@@ -255,6 +235,15 @@ export const adminProjectInvitationService = {
         throw new Error('Can only cancel pending or accepted invitations');
       }
 
+      const userRef = doc(firestore, 'users', invitation.userID);
+      const userSnap = await getDoc(userRef);
+      const workerName = userSnap.exists() ? userSnap.data().name : 'Unknown Worker';
+
+      const projectRef = doc(firestore, 'projects', invitation.projectID);
+      const projSnap = await getDoc(projectRef);
+      const projectName = projSnap.exists() ? projSnap.data().name : 'Unknown Project';
+
+      // 1) Update doc
       const now = Timestamp.now();
       const newData = {
         status: 'cancelled',
@@ -267,14 +256,13 @@ export const adminProjectInvitationService = {
           type: 'cancel'
         })
       };
-
       await updateDoc(invRef, newData);
 
-      // Also update project doc (remove user from project if present)
+      // 2) Remove from project doc if present
       await syncProjectWorkersMap(invitation, 'cancelled');
 
-      // Notification
-      const notif = {
+      // 3) Notify the worker
+      await addDoc(collection(firestore, 'notifications'), {
         type: 'project_invitation_cancelled',
         title: 'Project Invitation Cancelled',
         message: 'Your project invitation has been cancelled',
@@ -284,8 +272,15 @@ export const adminProjectInvitationService = {
         createdAt: serverTimestamp(),
         read: false,
         link: '/worker/project-invitations'
-      };
-      await addDoc(collection(firestore, 'notifications'), notif);
+      });
+
+      // 4) Notify all admins
+      await adminNotificationService.notifyAllAdminsInvitationCancelled(
+        invitationId,
+        workerName,
+        projectName,
+        reason
+      );
 
       return true;
     } catch (error) {
@@ -294,7 +289,13 @@ export const adminProjectInvitationService = {
     }
   },
 
-  // 6) Retry invitation (for 'rejected')
+  /**
+   * retryInvitation (for 'rejected').
+   * 1) set status='pending'
+   * 2) no change to project doc
+   * 3) notify worker
+   * 4) optionally notify all admins?
+   */
   retryInvitation: async (invitationId) => {
     try {
       const invRef = doc(firestore, 'projectInvitations', invitationId);
@@ -307,7 +308,7 @@ export const adminProjectInvitationService = {
       }
 
       const now = Timestamp.now();
-      const newData = {
+      await updateDoc(invRef, {
         status: 'pending',
         updatedAt: serverTimestamp(),
         requiredResponseDate: Timestamp.fromDate(new Date(Date.now() + 7*24*60*60*1000)),
@@ -316,14 +317,10 @@ export const adminProjectInvitationService = {
           by: getAuth().currentUser.uid,
           type: 'retry'
         })
-      };
-      await updateDoc(invRef, newData);
+      });
 
-      // Worker wouldn't be in project doc if it was 'rejected' before, so no changes needed.
-      // If you prefer to remove them from the doc, do so. Typically they're not in the doc anyway.
-
-      // Notification
-      const notif = {
+      // 1) Worker notification
+      await addDoc(collection(firestore, 'notifications'), {
         type: 'project_invitation_retried',
         title: 'Project Invitation Retried',
         message: 'Your project invitation has been retried. Please respond to it.',
@@ -333,8 +330,20 @@ export const adminProjectInvitationService = {
         createdAt: serverTimestamp(),
         read: false,
         link: '/worker/project-invitations'
-      };
-      await addDoc(collection(firestore, 'notifications'), notif);
+      });
+
+      // 2) Admin notification
+      // fetch worker & project names
+      const userSnap = await getDoc(doc(firestore, 'users', invitation.userID));
+      const workerName = userSnap.exists() ? userSnap.data().name : 'Unknown Worker';
+      const projectSnap = await getDoc(doc(firestore, 'projects', invitation.projectID));
+      const projectName = projectSnap.exists() ? projectSnap.data().name : 'Unknown Project';
+
+      await adminNotificationService.notifyAllAdminsInvitationRetried(
+        invitationId,
+        workerName,
+        projectName
+      );
 
       return true;
     } catch (error) {
@@ -343,7 +352,14 @@ export const adminProjectInvitationService = {
     }
   },
 
-  // 7) Reinstate invitation (for 'cancelled')
+
+  /**
+   * reinstateInvitation (for 'cancelled').
+   * 1) set status='pending'
+   * 2) no immediate project doc change
+   * 3) notify worker
+   * 4) notify all admins
+   */
   reinstateInvitation: async (invitationId) => {
     try {
       const invRef = doc(firestore, 'projectInvitations', invitationId);
@@ -355,6 +371,12 @@ export const adminProjectInvitationService = {
       if (invitation.status !== 'cancelled') {
         throw new Error('Can only reinstate cancelled invitations');
       }
+
+      const userSnap = await getDoc(doc(firestore, 'users', invitation.userID));
+      const workerName = userSnap.exists() ? userSnap.data().name : 'Unknown Worker';
+
+      const projectSnap = await getDoc(doc(firestore, 'projects', invitation.projectID));
+      const projectName = projectSnap.exists() ? projectSnap.data().name : 'Unknown Project';
 
       const now = Timestamp.now();
       const newData = {
@@ -371,22 +393,25 @@ export const adminProjectInvitationService = {
       };
       await updateDoc(invRef, newData);
 
-      // If it was "cancelled," the user might have been removed from project doc. 
-      // No immediate action to add them unless they "accept" again.
-
-      // Notification
-      const notif = {
+      // 3) Notify worker
+      await addDoc(collection(firestore, 'notifications'), {
         type: 'project_invitation_reinstated',
         title: 'Project Invitation Reinstated',
         message: 'Your project invitation has been reinstated. Please respond to it.',
         entityID: invitationId,
         entityType: 'project_invitation',
         userID: invitation.userID,
-        createdAt: Timestamp.now(),
+        createdAt: serverTimestamp(),
         read: false,
         link: '/worker/project-invitations'
-      };
-      await addDoc(collection(firestore, 'notifications'), notif);
+      });
+
+      // 4) Notify all admins
+      await adminNotificationService.notifyAllAdminsInvitationReinstated(
+        invitationId,
+        workerName,
+        projectName
+      );
 
       return true;
     } catch (error) {
@@ -395,125 +420,22 @@ export const adminProjectInvitationService = {
     }
   },
 
-  // 8) Accept invitation – for workers (or admin on behalf)
   /**
-   * If you want the worker or an admin to set invitation.status='accepted',
-   * then we add them to the project doc.
+   * expireInvitation: sets status='rejected' if it's pending and past due
    */
-  acceptInvitation: async (invitationId) => {
-    try {
-      const invRef = doc(firestore, 'projectInvitations', invitationId);
-      const snap = await getDoc(invRef);
-      if (!snap.exists()) throw new Error('Invitation not found');
-      const invitation = snap.data();
-
-      if (invitation.status !== 'pending') {
-        throw new Error('Can only accept a pending invitation');
-      }
-
-      const now = Timestamp.now();
-      const newData = {
-        status: 'accepted',
-        updatedAt: serverTimestamp(),
-        responseDate: now,  // store the acceptance date
-        // Optionally remove declineReason if it existed
-        declineReason: null
-      };
-      await updateDoc(invRef, newData);
-
-      // Now also update project doc => add user to workers map
-      await syncProjectWorkersMap(invitation, 'accepted');
-
-      // Possibly create a notification for the user or for the admin:
-      // e.g., "Worker accepted your invitation"
-      // For brevity, we skip here or do:
-      /*
-      const notif = {
-        type: 'project_invitation_accepted',
-        title: 'Invitation Accepted',
-        message: 'The project invitation was accepted',
-        entityID: invitationId,
-        entityType: 'project_invitation',
-        userID: <some-admin-id or invitation.projectOwnerId>,
-        createdAt: serverTimestamp(),
-        read: false,
-        link: '/admin/projects/...'
-      };
-      await addDoc(collection(firestore, 'notifications'), notif);
-      */
-
-      return true;
-    } catch (error) {
-      console.error('Error accepting invitation:', error);
-      throw error;
-    }
-  },
-
-  // 9) Decline invitation
-  /**
-   * If the worker or admin sets invitation.status='rejected',
-   * remove them from project doc if they were in it (though typically they are not yet).
-   */
-  declineInvitation: async (invitationId, reason = '') => {
-    try {
-      const invRef = doc(firestore, 'projectInvitations', invitationId);
-      const snap = await getDoc(invRef);
-      if (!snap.exists()) throw new Error('Invitation not found');
-      const invitation = snap.data();
-
-      if (invitation.status !== 'pending') {
-        throw new Error('Can only decline a pending invitation');
-      }
-
-      const now = Timestamp.now();
-      const newData = {
-        status: 'rejected',
-        declineReason: reason,
-        updatedAt: serverTimestamp(),
-        responseDate: now
-      };
-      await updateDoc(invRef, newData);
-
-      // Remove user from project doc if for some reason they were added (rare for "pending").
-      await syncProjectWorkersMap(invitation, 'rejected');
-
-      // Possibly create a notification "Worker declined your invitation"
-      // omitted for brevity
-
-      return true;
-    } catch (error) {
-      console.error('Error declining invitation:', error);
-      throw error;
-    }
-  },
-
-  // 10) Delete invitation (admin only)
-  deleteInvitation: async (invitationId) => {
-    try {
-      const invitationRef = doc(firestore, 'projectInvitations', invitationId);
-      await deleteDoc(invitationRef);
-      return true;
-    } catch (error) {
-      console.error('Error deleting invitation:', error);
-      throw error;
-    }
-  },
-
-  // 11) Expire invitation (status='rejected' if past requiredResponseDate)
   expireInvitation: async (invitationId) => {
     try {
       const invitationRef = doc(firestore, 'projectInvitations', invitationId);
       const snap = await getDoc(invitationRef);
       if (!snap.exists()) throw new Error('Invitation not found');
-
       const invitation = snap.data();
+
       if (invitation.status === 'pending') {
         await updateDoc(invitationRef, {
           status: 'rejected',
           updatedAt: serverTimestamp(),
           declineReason: 'expired'
         });
-        // Remove from project doc if any partial was there
         await syncProjectWorkersMap(invitation, 'rejected');
       }
       return true;
@@ -523,7 +445,9 @@ export const adminProjectInvitationService = {
     }
   },
 
-  // 12) Get available workers for a project (not already invited)
+  /**
+   * getAvailableWorkers: returns active workers not yet invited to this project
+   */
   getAvailableWorkers: async (projectId) => {
     if (!projectId) throw new Error('Project ID is undefined');
     try {

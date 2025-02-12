@@ -6,19 +6,19 @@ import {
   declineProjectInvitation
 } from '../../services/workerProjectInvitationService';
 
-console.log("WorkerProjectInvitations component loaded");
-
 const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations, user }) => {
   const [subTab, setSubTab] = useState('pending'); // 'pending' or 'historical'
-  const [historicalStatusFilter, setHistoricalStatusFilter] = useState('all');
-  // 'all', 'accepted', 'rejected', 'cancelled'
+  const [historicalStatusFilter, setHistoricalStatusFilter] = useState('all'); // 'all', 'accepted', 'rejected', 'cancelled'
   const [startFilter, setStartFilter] = useState('');
   const [endFilter, setEndFilter] = useState('');
 
   const handleAccept = async (invitationId) => {
     try {
+      // 1) call service to accept invitation
       await acceptProjectInvitation(invitationId, user.uid);
-      refreshInvitations();
+      // 2) re-fetch from Firestore
+      await refreshInvitations();
+      // 3) optional: show a success toast, etc.
     } catch (error) {
       console.error('Error accepting invitation:', error);
     }
@@ -28,8 +28,9 @@ const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations, us
     try {
       const reason = prompt('Enter the reason for rejecting this invitation:');
       if (!reason) return;
+
       await declineProjectInvitation(invitationId, user.uid, reason);
-      refreshInvitations();
+      await refreshInvitations();
     } catch (error) {
       console.error('Error rejecting invitation:', error);
     }
@@ -43,28 +44,27 @@ const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations, us
     return <div className="text-gray-500 text-center">No invitations found.</div>;
   }
 
-  // Filter out pending invitations
+  // Separate pending vs historical
   const pendingInvitations = invitations.filter(
     (inv) => inv.status?.toLowerCase() === 'pending'
   );
 
-  // Filter historical invitations by status in [accepted, rejected, cancelled]
   let historicalInvitations = invitations.filter((inv) => {
     const s = inv.status?.toLowerCase() || '';
     return ['accepted', 'rejected', 'cancelled'].includes(s);
   });
 
-  // Apply status filter if not "all"
+  // Filter historical by status if not "all"
   if (historicalStatusFilter !== 'all') {
     historicalInvitations = historicalInvitations.filter(
       (inv) => inv.status?.toLowerCase() === historicalStatusFilter
     );
   }
 
-  // Apply date range filter (using project's start date)
+  // Optional date range filter (based on project startDate)
   if (subTab === 'historical') {
-    let fromDate = startFilter ? parseISO(startFilter) : null;
-    let toDate = endFilter ? parseISO(endFilter) : null;
+    const fromDate = startFilter ? parseISO(startFilter) : null;
+    const toDate = endFilter ? parseISO(endFilter) : null;
 
     historicalInvitations = historicalInvitations.filter((inv) => {
       const projStartDate = inv.project?.startDate?.toDate?.();
@@ -101,7 +101,7 @@ const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations, us
         </button>
       </div>
 
-      {/* Historical Tab Filter Controls: Status & Date Range (horizontal row) */}
+      {/* Historical Filters */}
       {subTab === 'historical' && (
         <div className="mb-4 flex items-center space-x-4">
           <div className="flex items-center space-x-2">
@@ -138,6 +138,7 @@ const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations, us
         </div>
       )}
 
+      {/* Pending Tab */}
       {subTab === 'pending' ? (
         pendingInvitations.length === 0 ? (
           <div className="text-gray-500 text-center">No pending invitations.</div>
@@ -160,24 +161,25 @@ const WorkerProjectInvitations = ({ invitations, loading, refreshInvitations, us
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2 items-center justify-end">
                     <button
-                    onClick={() => handleAccept(inv.id)}
-                    className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
+                      onClick={() => handleAccept(inv.id)}
+                      className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
                     >
-                    Accept
+                      Accept
                     </button>
                     <button
-                    onClick={() => handleReject(inv.id)}
-                    className="bg-nosco-red hover:bg-nosco-red-dark text-white px-3 py-1 rounded"
+                      onClick={() => handleReject(inv.id)}
+                      className="bg-nosco-red hover:bg-nosco-red-dark text-white px-3 py-1 rounded"
                     >
-                    Reject
+                      Reject
                     </button>
+                  </div>
                 </div>
               </div>
-            </div>
             ))}
           </div>
         )
       ) : (
+        // Historical Tab
         historicalInvitations.length === 0 ? (
           <div className="text-gray-500 text-center">
             No historical invitations found.
