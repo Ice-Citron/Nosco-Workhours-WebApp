@@ -2,7 +2,6 @@
 
 # dependencies
 /node_modules
-src/firebase/firebase_config.js
 frontend/src/firebase/nosco-app-b5be4-firebase-adminsdk-c0kb0-7a2b7f7df2.json
 /.pnp
 .pnp.js
