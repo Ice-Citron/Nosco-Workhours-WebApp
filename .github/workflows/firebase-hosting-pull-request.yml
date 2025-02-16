@@ -11,9 +11,13 @@ jobs:
   build_and_preview:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Nosco-app/frontend
     steps:
       - uses: actions/checkout@v4
-      - run: ls && cd Nosco-app/frontend && npm ci && npm run build
+      - run: npm ci
+      - run: npm run build
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
