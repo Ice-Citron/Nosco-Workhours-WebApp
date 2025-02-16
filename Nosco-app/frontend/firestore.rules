@@ -1,9 +1,239 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+    // Helper function
+    function isAdmin() {
+      return request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isActiveWorker() {
+      return request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+    }
+
+    // Users collection
+    match /users/{userID} {
+      allow read: if request.auth != null;
+
+      // Let an admin create or update any user doc,
+      // OR let the user themselves create/update their own doc
+      allow write: if (request.auth != null) && (
+        isAdmin() ||   // admin can write any doc
+        request.auth.uid == userID  // user can write their own doc
+      );
+    }
+
+    // Projects collection
+    match /projects/{projectID} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin() 
+               || (
+                    request.auth.uid in resource.data.workers
+                    // or some check that user is an invitee for this project
+                  );
+    }
+    
+    match /projectAssignments/{assignmentID} {
+      allow read: if request.auth != null;
+    }
+
+    match /workHours/{workHourID} {
+      allow read: if request.auth != null && 
+        (resource == null || resource.data.userID == request.auth.uid);
+      allow write: if request.auth != null && 
+        request.resource.data.userID == request.auth.uid;
+    }
+    
+    match /payments/{paymentID} {
+      allow read: if request.auth != null && 
+        (resource == null || resource.data.userID == request.auth.uid);
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && 
+        (resource.data.userID == request.auth.uid || 
+         request.auth.token.role == 'admin');
+      allow delete: if request.auth != null && request.auth.token.role == 'admin';
+    }
+
+        // Update expense rules to handle general expenses
+    match /expense/{expenseID} {
+      allow read: if request.auth != null && (
+        resource == null || 
+        resource.data.userID == request.auth.uid ||
+        isAdmin() ||
+        resource.data.isGeneralExpense == true // allow reading company expenses
+      );
+
+      allow create: if request.auth != null && (
+        (!request.resource.data.isGeneralExpense && request.resource.data.userID == request.auth.uid) ||
+        (request.resource.data.isGeneralExpense && isAdmin())
+      );
+
+      allow update: if request.auth != null && (
+        (resource.data.userID == request.auth.uid && !resource.data.isGeneralExpense) ||
+        isAdmin()
+      );
+
+      allow delete: if request.auth != null && isAdmin();
+    }
+    
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && 
+        resource.data.userID == request.auth.uid;
+      allow update: if request.auth != null 
+                && request.auth.uid == resource.data.userID;
+      // Only allow system/admin to create notifications
+      allow create: if request.auth != null; 
+    }
+    
+    match /rewards/{rewardID} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.role == 'admin';
+    }
+
+    match /rewardHistory/{historyID} {
+      allow read: if request.auth != null && 
+        resource.data.userID == request.auth.uid;
+      allow create: if request.auth != null && 
+        request.auth.token.role == 'admin';
+    }
+    
+    match /feedback/{docID} {
+      allow read: if request.auth != null && (
+        resource.data.userID == request.auth.uid || 
+        request.auth.token.role == 'admin'
+      );
+      allow create: if request.auth != null && 
+        request.resource.data.userID == request.auth.uid &&
+        request.resource.data.status == 'New';
+      allow update: if request.auth != null && (
+        (resource.data.userID == request.auth.uid && 
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['updatedAt', 'message', 'subject'])) ||
+        request.auth.token.role == 'admin'
+      );
+      allow delete: if request.auth != null && 
+        request.auth.token.role == 'admin';
+    }
+    
+    match /workHours/{workHourID} {
+      allow read: if request.auth != null && (
+        // Allow workers to read their own work hours
+        resource.data.userID == request.auth.uid ||
+        // Allow admins to read all work hours
+        isAdmin()
+      );
+      
+      allow create: if request.auth != null && 
+        request.resource.data.userID == request.auth.uid;
+      
+      allow update: if request.auth != null && (
+        // Workers can only update their own pending work hours
+        (resource.data.userID == request.auth.uid && 
+         resource.data.status == 'pending') ||
+        // Admins can update any work hours
+        isAdmin()
+      );
+      
+      allow delete: if request.auth != null && isAdmin();
+    }
+    
+    match /expenseTypes/{typeID} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && isAdmin();
+    }
+    
+    match /b/{bucket}/o {
+      match /receipts/{allPaths=**} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+    }
+    
+    match /payments/{paymentID} {
+      // Allow admins to read all payments
+      allow read: if request.auth != null && (
+        // Allow users to read their own payments
+        resource.data.userID == request.auth.uid ||
+        // Allow admins to read all payments
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+
+      // Allow admins to update payments
+      allow update: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+
+      // Allow users to create their own payments or admins to create any payment
+      allow create: if request.auth != null && (
+        request.resource.data.userID == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+
+      // Only admins can delete payments
+      allow delete: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    match /workHours/{workHourID} {
+      allow read: if request.auth != null && (
+        // Workers can read their own work hours
+        resource.data.userID == request.auth.uid ||
+        // Admins can read all work hours
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+
+      allow create: if request.auth != null && 
+        request.resource.data.userID == request.auth.uid;
+
+      allow update: if request.auth != null && (
+        // Workers can only update their own pending work hours
+        (resource.data.userID == request.auth.uid && 
+         resource.data.status == 'pending') ||
+        // Admins can update any work hours
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+
+      // Added new validation for paid field
+      function validateWorkHourUpdate() {
+        return (
+          // Ensure paid field is a boolean
+          request.resource.data.paid is bool &&
+          // If marking as paid, ensure it's by an admin
+          (!request.resource.data.paid || 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
+      }
+    }
+    
+    // Project Invitations rules
+    match /projectInvitations/{invitationId} {
+      // Read permissions
+      allow read: if request.auth != null && (
+        // Users can read their own invitations
+        resource.data.userID == request.auth.uid ||
+        // Admins can read all invitations
+        isAdmin()
+      );
+
+      // Create permissions (only admin)
+      allow create: if isAdmin();
+
+      // Update permissions
+      allow update: if request.auth != null && (
+        // A worker can update ANY fields if they own the doc
+			  (resource.data.userID == request.auth.uid) ||
+        // Admins can update everything
+        isAdmin()
+      );
+
+      // Delete permissions (only admin)
+      allow delete: if isAdmin();
+    }
+    
+    match /settings/{docID} {
+      // Let admin read/write
+      allow read: if request.auth != null; 
+			allow write: if isAdmin();
     }
   }
 }
