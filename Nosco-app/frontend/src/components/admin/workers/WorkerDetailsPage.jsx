@@ -1,4 +1,4 @@
-// src/components/admin/workers/WorkerDetailsModal.jsx
+// src/components/admin/workers/WorkerDetailsPage.jsx
 import React, { useState, useEffect } from 'react';
 import { adminUserService } from '../../../services/adminUserService';
 

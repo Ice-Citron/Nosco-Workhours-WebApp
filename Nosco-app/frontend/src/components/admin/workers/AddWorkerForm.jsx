@@ -188,9 +188,6 @@ const AddWorkerForm = ({ isOpen, onClose, onWorkerAdded }) => {
               className="w-full px-3 py-2 border rounded"
               placeholder="(Optional) Not recommended"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Storing an unencrypted password is not secure.
-            </p>
           </div>
 
           {/* Error Display */}
