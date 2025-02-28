@@ -1,6 +1,5 @@
 // ExpenseFilterModal.jsx
 import React, { useState, useEffect } from 'react';
-import { adminExpenseService } from '../../../../services/adminExpenseService';
 
 const ExpenseFilterModal = ({ isOpen, onClose, onApplyFilters, activeFilters }) => {
   // Initialize filters with activeFilters when modal opens
