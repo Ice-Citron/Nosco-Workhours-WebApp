@@ -157,7 +157,7 @@ export const adminUserService = {
     }
   },
 
-  // Update worker details
+  // Update worker details 
   updateWorkerDetails: async (workerId, data) => {
     try {
       const workerRef = doc(firestore, 'users', workerId);
