@@ -55,13 +55,25 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.token.role == 'admin';
     }
 
-        // Update expense rules to handle general expenses
+    // Update expense rules to handle general expenses
     match /expense/{expenseID} {
+      // Helper function to check if an expense is linked to any of the user's payments
+      function isExpenseLinkedToUserPayment() {
+        // Get all payments for the current user that reference this expense
+        let userPayments = firestore.get(/databases/$(database)/documents/payments
+          .where("userID", "==", request.auth.uid)
+          .where("relatedExpenseIDs", "array-contains", expenseID));
+
+        // Return true if any such payment exists
+        return userPayments.size() > 0;
+      }
+
       allow read: if request.auth != null && (
         resource == null || 
         resource.data.userID == request.auth.uid ||
         isAdmin() ||
-        resource.data.isGeneralExpense == true // allow reading company expenses
+        resource.data.isGeneralExpense == true || // allow reading company expenses
+        isExpenseLinkedToUserPayment()  // allow if the expense is linked to any of the user's payments
       );
 
       allow create: if request.auth != null && (
