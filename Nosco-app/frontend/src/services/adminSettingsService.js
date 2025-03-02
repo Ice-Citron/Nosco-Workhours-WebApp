@@ -170,6 +170,37 @@ export const convertBetweenCurrencies = async (value, fromCurrency, toCurrency) 
   return (value / fromRate) * toRate;
 };
 
+/**
+ * Trigger a manual backup of Firestore database
+ * @returns {Promise<{success: boolean, message: string, backupPath?: string}>} Result of the backup operation
+ */
+export const triggerManualBackup = async () => {
+  try {
+    // You'll need to update this with your actual function URL after deployment
+    // Format: https://[region]-nosco-app-b5be4.cloudfunctions.net/manualFirestoreBackup
+    const functionUrl = 'https://us-central1-nosco-app-b5be4.cloudfunctions.net/manualFirestoreBackup';
+    
+    const response = await fetch(functionUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Failed to trigger manual backup:', error);
+    return {
+      success: false,
+      message: `Failed to trigger backup: ${error.message || 'Unknown error'}`
+    };
+  }
+};
 
 
 /*

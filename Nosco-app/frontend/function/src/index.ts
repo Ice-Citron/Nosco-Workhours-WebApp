@@ -12,6 +12,7 @@ admin.initializeApp();
 import {adminProjectService} from "./services/adminProjectService";
 import { autoRefreshIfNeeded } from "./services/adminSettingsService";
 import { autoCancelEndedProjectInvitations, autoExpireOverdueInvitations, syncInvitationsWithProjectWorkers } from "./services/adminProjectInvitationService";
+import { backupFirestore, BackupType, createManualBackup } from "./services/backup/firestoreBackupService";
 
 
 /**
@@ -128,6 +129,57 @@ export const cleanupOldNotifications = functions.pubsub
 
     console.log(`cleanupOldNotifications: Deleted ${deleteCount} old notifications.`);
   });
+
+/**
+ * Weekly automatic Firestore backup function
+ * Runs every Sunday at 1 AM
+ */
+export const weeklyFirestoreBackup = functions.pubsub
+  .schedule("0 1 * * 0") // Weekly at 1 AM on Sunday
+  .timeZone("Asia/Singapore")
+  .onRun(async () => {
+    console.log("Running weeklyFirestoreBackup...");
+    try {
+      await backupFirestore(BackupType.AUTO);
+      return null;
+    } catch (error) {
+      console.error("Weekly backup failed:", error);
+      return null;
+    }
+  });
+
+/**
+ * Manually triggered backup function
+ * This can be triggered from the Firebase console
+ * Follows the rules: max 2 backups per week, with priority:
+ * 1 auto + 1 manual, or overwrite existing manual
+ */
+export const manualFirestoreBackup = functions.https.onRequest(async (req, res) => {
+  // Set CORS headers
+  res.set('Access-Control-Allow-Origin', '*');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'GET');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.status(204).send('');
+    return;
+  }
+  
+  console.log("Manual backup requested via HTTP");
+  
+  try {
+    const result = await createManualBackup();
+    console.log("Backup complete:", result);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Backup failed:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Backup failed: ${error instanceof Error ? error.message : String(error)}`
+    });
+  }
+});
 
 /**
  * 
