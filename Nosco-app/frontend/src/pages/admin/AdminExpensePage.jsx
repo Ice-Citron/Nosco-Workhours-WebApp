@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Tab from '../../components/common/Tab';
-import ExpenseApprovalSection from '../../components/admin/expenses/ExpenseApprovalSection';
+import ExpenseApprovalSection from '../../components/admin/expenses/ExpenseApprovalSection/ExpenseApprovalSection';
 import ExpenseTypeSection from '../../components/admin/expenses/ExpenseTypeSection/ExpenseTypeSection';
 import GeneralExpenseSection from '../../components/admin/expenses/GeneralExpenseSection/GeneralExpenseSection';
 

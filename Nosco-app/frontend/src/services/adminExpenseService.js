@@ -14,6 +14,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import currencyService from './currencyService';
+import { workerNotificationService } from '../services/workerNotificationService';
 
 
 export const adminExpenseService = {
@@ -209,20 +210,25 @@ export const adminExpenseService = {
     }
   },
  
-  // Approve expense
+  // Approve expense - add notifications
   approveExpense: async (expenseId, adminId) => {
     try {
       const expenseRef = doc(db, 'expense', expenseId);
       const expenseDoc = await getDoc(expenseRef);
+      
+      if (!expenseDoc.exists()) {
+        throw new Error('Expense not found');
+      }
+      
       const expenseData = expenseDoc.data();
- 
+
       // Calculate points if needed (not for general expenses)
       let pointsAwarded = null;
       if (!expenseData.isGeneralExpense) {
         // Example points calculation: 1 point per $50 spent
         pointsAwarded = Math.floor((expenseData.amount / 50) * 2) / 2; // Round to nearest 0.5
       }
- 
+
       await updateDoc(expenseRef, {
         status: 'approved',
         approvedBy: adminId,
@@ -230,17 +236,32 @@ export const adminExpenseService = {
         updatedAt: Timestamp.now(),
         pointsAwarded
       });
+      
+      // Add notification for worker (if not a general expense)
+      if (!expenseData.isGeneralExpense && expenseData.userID) {
+        await workerNotificationService.notifyExpenseApproval(
+          expenseId, 
+          expenseData.amount,
+          expenseData.currency || 'USD',
+          expenseData.userID
+        );
+      }
+      
+      return true;
     } catch (error) {
       console.error('Error approving expense:', error);
       throw error;
     }
   },
- 
-  // Bulk approve expenses
+
+  // Bulk approve expenses - add notifications
   bulkApproveExpenses: async (expenseIds, adminId) => {
     try {
       const batch = writeBatch(db);
       const now = Timestamp.now();
+      
+      // Store notification promises to be executed after batch update
+      const notificationPromises = [];
 
       for (const id of expenseIds) {
         const expenseRef = doc(db, 'expense', id);
@@ -261,34 +282,120 @@ export const adminExpenseService = {
             updatedAt: now,
             pointsAwarded
           });
+          
+          // Queue notification to be sent after batch commit
+          if (!expenseData.isGeneralExpense && expenseData.userID) {
+            notificationPromises.push(
+              workerNotificationService.notifyExpenseApproval(
+                id,
+                expenseData.amount,
+                expenseData.currency || 'USD',
+                expenseData.userID
+              )
+            );
+          }
         }
       }
 
       await batch.commit();
+      
+      // Execute all notifications after the batch has been committed
+      await Promise.all(notificationPromises);
+      
+      return true;
     } catch (error) {
       console.error('Error bulk approving expenses:', error);
       throw error;
     }
   },
 
-  // Add bulkRejectExpenses method
+  // Reject expense - add notifications
+  rejectExpense: async (expenseId, adminId, rejectionReason) => {
+    try {
+      const expenseRef = doc(db, 'expense', expenseId);
+      const expenseDoc = await getDoc(expenseRef);
+      
+      if (!expenseDoc.exists()) {
+        throw new Error('Expense not found');
+      }
+      
+      const expenseData = expenseDoc.data();
+      
+      await updateDoc(expenseRef, {
+        status: 'rejected',
+        rejectionReason,
+        rejectedBy: adminId,
+        rejectedAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        updatedBy: adminId,
+        // Clear approval data
+        approvedBy: null,
+        approvalDate: null
+      });
+      
+      // Add notification for worker (if not a general expense)
+      if (!expenseData.isGeneralExpense && expenseData.userID) {
+        await workerNotificationService.notifyExpenseRejection(
+          expenseId,
+          rejectionReason,
+          expenseData.userID
+        );
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error rejecting expense:', error);
+      throw error;
+    }
+  },
+
+  // Bulk reject expenses - add notifications
   bulkRejectExpenses: async (expenseIds, adminId, rejectionReason) => {
     try {
       const batch = writeBatch(db);
       const now = Timestamp.now();
+      
+      // Store notification promises to be executed after batch update
+      const notificationPromises = [];
 
       for (const id of expenseIds) {
         const expenseRef = doc(db, 'expense', id);
-        batch.update(expenseRef, {
-          status: 'rejected',
-          approvedBy: adminId,
-          approvalDate: now,
-          updatedAt: now,
-          rejectionReason
-        });
+        const expenseDoc = await getDoc(expenseRef);
+        
+        if (expenseDoc.exists()) {
+          const expenseData = expenseDoc.data();
+          
+          batch.update(expenseRef, {
+            status: 'rejected',
+            rejectionReason,
+            rejectedBy: adminId,
+            rejectedAt: now,
+            updatedAt: now,
+            updatedBy: adminId,
+            // Clear approval data
+            approvedBy: null,
+            approvalDate: null
+          });
+          
+          // Queue notification to be sent after batch commit
+          if (!expenseData.isGeneralExpense && expenseData.userID) {
+            notificationPromises.push(
+              workerNotificationService.notifyExpenseRejection(
+                id,
+                rejectionReason,
+                expenseData.userID
+              )
+            );
+          }
+        }
       }
 
       await batch.commit();
+      
+      // Execute all notifications after the batch has been committed
+      await Promise.all(notificationPromises);
+      
+      return true;
     } catch (error) {
       console.error('Error bulk rejecting expenses:', error);
       throw error;
@@ -460,27 +567,6 @@ export const adminExpenseService = {
       await updateDoc(expenseRef, updateData);
     } catch (error) {
       console.error('Error updating expense:', error);
-      throw error;
-    }
-  },
-
-  // Reject an expense with proper status updates
-  rejectExpense: async (expenseId, adminId, rejectionReason) => {
-    try {
-      const expenseRef = doc(db, 'expense', expenseId);
-      await updateDoc(expenseRef, {
-        status: 'rejected',
-        rejectionReason,
-        rejectedBy: adminId,
-        rejectedAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-        updatedBy: adminId,
-        // Clear approval data
-        approvedBy: null,
-        approvalDate: null
-      });
-    } catch (error) {
-      console.error('Error rejecting expense:', error);
       throw error;
     }
   },

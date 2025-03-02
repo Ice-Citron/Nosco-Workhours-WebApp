@@ -287,6 +287,100 @@ export const adminNotificationService = {
     };
     return await adminNotificationService.createNotificationForAllAdmins(notificationData);
   },
+
+  // ----------------------------------------------------------------
+  // 6) User Management Notifications - NEW
+  // ----------------------------------------------------------------
+  
+  // 6a) When a new worker is created
+  notifyAllAdminsWorkerCreated: async (workerId, workerName) => {
+    const link = '/admin/user-management';
+    const notificationData = {
+      type: 'worker_created',
+      title: 'New Worker Added',
+      message: `Worker "${workerName}" has been added to the system.`,
+      entityID: workerId,
+      entityType: 'user',
+      link,
+      priority: 'medium'
+    };
+    return await adminNotificationService.createNotificationForAllAdmins(notificationData);
+  },
+
+  // 6b) When a worker is archived
+  notifyAllAdminsWorkerArchived: async (workerId, workerName) => {
+    const link = '/admin/user-management';
+    const notificationData = {
+      type: 'worker_archived',
+      title: 'Worker Archived',
+      message: `Worker "${workerName}" has been archived.`,
+      entityID: workerId, 
+      entityType: 'user',
+      link,
+      priority: 'medium'
+    };
+    return await adminNotificationService.createNotificationForAllAdmins(notificationData);
+  },
+
+  // 6c) When a worker is unarchived (reactivated)
+  notifyAllAdminsWorkerUnarchived: async (workerId, workerName) => {
+    const link = '/admin/user-management';
+    const notificationData = {
+      type: 'worker_unarchived',
+      title: 'Worker Reactivated',
+      message: `Worker "${workerName}" has been reactivated.`,
+      entityID: workerId,
+      entityType: 'user',
+      link,
+      priority: 'medium'
+    };
+    return await adminNotificationService.createNotificationForAllAdmins(notificationData);
+  },
+
+  // 6d) When a new admin is created
+  notifyAllAdminsAdminCreated: async (adminId, adminName) => {
+    const link = '/admin/user-management';
+    const notificationData = {
+      type: 'admin_created',
+      title: 'New Administrator Added',
+      message: `Administrator "${adminName}" has been added to the system.`,
+      entityID: adminId,
+      entityType: 'user',
+      link,
+      priority: 'high'
+    };
+    return await adminNotificationService.createNotificationForAllAdmins(notificationData);
+  },
+
+  // 6e) When an admin is archived
+  notifyAllAdminsAdminArchived: async (adminId, adminName) => {
+    const link = '/admin/user-management';
+    const notificationData = {
+      type: 'admin_archived',
+      title: 'Administrator Archived',
+      message: `Administrator "${adminName}" has been archived.`,
+      entityID: adminId,
+      entityType: 'user',
+      link,
+      priority: 'high'
+    };
+    return await adminNotificationService.createNotificationForAllAdmins(notificationData);
+  },
+
+  // 6f) When an admin is unarchived (reactivated)
+  notifyAllAdminsAdminUnarchived: async (adminId, adminName) => {
+    const link = '/admin/user-management';
+    const notificationData = {
+      type: 'admin_unarchived',
+      title: 'Administrator Reactivated',
+      message: `Administrator "${adminName}" has been reactivated.`,
+      entityID: adminId,
+      entityType: 'user',
+      link,
+      priority: 'high'
+    };
+    return await adminNotificationService.createNotificationForAllAdmins(notificationData);
+  },
 };
 
 export default adminNotificationService;

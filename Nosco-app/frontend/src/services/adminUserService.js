@@ -14,6 +14,8 @@ import {
   getDoc // <-- import getDoc
 } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
+import adminNotificationService from './adminNotificationService';
+
 
 export const adminUserService = {
   // Fetch all workers
@@ -100,6 +102,12 @@ export const adminUserService = {
 
       // 3) Write that doc to `users/{newUid}`
       await setDoc(doc(firestore, 'users', newUid), newWorkerDoc);
+      
+      // 4) Notify all admins about the new worker
+      await adminNotificationService.notifyAllAdminsWorkerCreated(
+        newUid, 
+        workerData.name
+      );
 
       return { id: newUid, ...newWorkerDoc };
     } catch (error) {
@@ -134,6 +142,12 @@ export const adminUserService = {
 
       // 3) Write that doc to `users/{newUid}`
       await setDoc(doc(firestore, 'users', newUid), newAdminDoc);
+      
+      // 4) Notify all admins about the new admin
+      await adminNotificationService.notifyAllAdminsAdminCreated(
+        newUid, 
+        adminData.name
+      );
 
       return { id: newUid, ...newAdminDoc };
     } catch (error) {
@@ -142,31 +156,46 @@ export const adminUserService = {
     }
   },
 
-
-  // Update worker status (active or archived)
-  updateWorkerStatus: async (workerId, status) => {
+  // Update worker/admin status (modified to include notifications)
+  updateWorkerStatus: async (userId, status) => {
     try {
-      const workerRef = doc(firestore, 'users', workerId);
-      await updateDoc(workerRef, {
+      // Get the user data first to determine if it's a worker or admin
+      const userRef = doc(firestore, 'users', userId);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        throw new Error('User not found');
+      }
+      
+      const userData = userSnap.data();
+      const userName = userData.name || 'Unknown User';
+      const userRole = userData.role;
+      const oldStatus = userData.status;
+      
+      // Update the status
+      await updateDoc(userRef, {
         status: status,
         updatedAt: Timestamp.now()
       });
+      
+      // Notify all admins based on role and action
+      if (userRole === 'worker') {
+        if (status === 'archived' && oldStatus !== 'archived') {
+          await adminNotificationService.notifyAllAdminsWorkerArchived(userId, userName);
+        } else if (status === 'active' && oldStatus === 'archived') {
+          await adminNotificationService.notifyAllAdminsWorkerUnarchived(userId, userName);
+        }
+      } else if (userRole === 'admin') {
+        if (status === 'archived' && oldStatus !== 'archived') {
+          await adminNotificationService.notifyAllAdminsAdminArchived(userId, userName);
+        } else if (status === 'active' && oldStatus === 'archived') {
+          await adminNotificationService.notifyAllAdminsAdminUnarchived(userId, userName);
+        }
+      }
+      
+      return true;
     } catch (error) {
-      console.error('Error updating worker status:', error);
-      throw error;
-    }
-  },
-
-  // Update worker details 
-  updateWorkerDetails: async (workerId, data) => {
-    try {
-      const workerRef = doc(firestore, 'users', workerId);
-      await updateDoc(workerRef, {
-        ...data,
-        updatedAt: Timestamp.now()
-      });
-    } catch (error) {
-      console.error('Error updating worker details:', error);
+      console.error('Error updating user status:', error);
       throw error;
     }
   },

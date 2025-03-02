@@ -15,6 +15,8 @@ import {
   arrayUnion,
   addDoc
 } from 'firebase/firestore';
+import { workerNotificationService } from '../services/workerNotificationService';
+
 
 /**
  * Helper: Compute the cost for a work-hour entry using the worker’s base rate.
@@ -136,7 +138,8 @@ export const adminPaymentService = {
         throw new Error('Payment not found');
       }
   
-      const { newStatus, paymentMethod, referenceNumber, comment, adminId } = updateDetails;
+      const paymentData = paymentDoc.data();
+      const { newStatus, paymentMethod, referenceNumber, comment, adminId, selectedBankAccount } = updateDetails;
       const historyEntry = {
         status: newStatus,
         paymentMethod,
@@ -157,7 +160,57 @@ export const adminPaymentService = {
           createdAt: Timestamp.fromDate(new Date()),
         },
         processingHistory: arrayUnion(historyEntry),
+        selectedBankAccount: selectedBankAccount || paymentData.selectedBankAccount
       });
+  
+      // Send notifications to worker based on payment status change
+      if (paymentData.userID) {
+        const userId = paymentData.userID;
+        const amount = paymentData.amount || 0;
+        const currency = paymentData.currency || 'USD';
+        const formattedAmount = new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: currency
+        }).format(amount);
+  
+        // Different notifications based on new status
+        if (newStatus === 'processing' && paymentData.status !== 'processing') {
+          // Payment has started processing
+          await workerNotificationService.createNotification({
+            type: 'payment_processing',
+            title: 'Payment Processing',
+            message: `Your payment of ${formattedAmount} is now being processed. Reference: ${referenceNumber}.`,
+            entityID: paymentId,
+            entityType: 'payment',
+            userID: userId,
+            link: '/worker/payments'
+          });
+        } 
+        else if (newStatus === 'completed') {
+          // Payment has been completed
+          await workerNotificationService.createNotification({
+            type: 'payment_completed',
+            title: 'Payment Completed',
+            message: `Your payment of ${formattedAmount} has been completed. Reference: ${referenceNumber}.`,
+            entityID: paymentId,
+            entityType: 'payment',
+            userID: userId,
+            link: '/worker/payments'
+          });
+        }
+        else if (newStatus === 'failed') {
+          // Payment failed
+          await workerNotificationService.createNotification({
+            type: 'payment_failed',
+            title: 'Payment Failed',
+            message: `Your payment of ${formattedAmount} could not be processed. Our admin team has been notified.`,
+            entityID: paymentId,
+            entityType: 'payment',
+            userID: userId,
+            link: '/worker/payments'
+          });
+        }
+      }
   
       return true;
     } catch (error) {
@@ -223,6 +276,23 @@ export const adminPaymentService = {
       };
   
       const docRef = await addDoc(paymentsRef, payment);
+      
+      // Notify worker if the payment is immediately set to processing
+      if (statusToUse === 'processing' && paymentData.userID) {
+        await workerNotificationService.createNotification({
+          type: 'payment_processing',
+          title: 'Payment Processing',
+          message: `Your payment of ${new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: paymentData.currency || 'USD'
+          }).format(paymentData.amount || 0)} is now being processed.`,
+          entityID: docRef.id,
+          entityType: 'payment',
+          userID: paymentData.userID,
+          link: '/worker/payments'
+        });
+      }
+      
       return docRef.id;
     } catch (error) {
       console.error('Error creating payment:', error);

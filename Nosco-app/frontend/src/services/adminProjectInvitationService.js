@@ -429,14 +429,52 @@ export const adminProjectInvitationService = {
       const snap = await getDoc(invitationRef);
       if (!snap.exists()) throw new Error('Invitation not found');
       const invitation = snap.data();
-
+  
       if (invitation.status === 'pending') {
+        // 1) Update invitation status
+        const now = Timestamp.now();
         await updateDoc(invitationRef, {
-          status: 'rejected',
+          status: 'cancelled',  // Using cancelled instead of rejected as requested
           updatedAt: serverTimestamp(),
-          declineReason: 'expired'
+          cancelReason: 'expired',
+          cancelledBy: getAuth().currentUser?.uid || 'system',
+          attempts: arrayUnion({
+            date: now,
+            by: getAuth().currentUser?.uid || 'system',
+            type: 'expire'
+          })
         });
-        await syncProjectWorkersMap(invitation, 'rejected');
+  
+        // 2) Remove from project workers map
+        await syncProjectWorkersMap(invitation, 'cancelled');
+  
+        // 3) Get worker and project details for notifications
+        const userSnap = await getDoc(doc(firestore, 'users', invitation.userID));
+        const workerName = userSnap.exists() ? userSnap.data().name : 'Unknown Worker';
+  
+        const projectSnap = await getDoc(doc(firestore, 'projects', invitation.projectID));
+        const projectName = projectSnap.exists() ? projectSnap.data().name : 'Unknown Project';
+  
+        // 4) Notify the worker
+        await addDoc(collection(firestore, 'notifications'), {
+          type: 'project_invitation_expired',
+          title: 'Project Invitation Expired',
+          message: `Your invitation to project "${projectName}" has expired`,
+          entityID: invitationId,
+          entityType: 'project_invitation',
+          userID: invitation.userID,
+          createdAt: serverTimestamp(),
+          read: false,
+          link: '/worker/project-invitations'
+        });
+  
+        // 5) Notify all admins using the existing cancelled notification
+        await adminNotificationService.notifyAllAdminsInvitationCancelled(
+          invitationId,
+          workerName,
+          projectName,
+          'Invitation expired'
+        );
       }
       return true;
     } catch (error) {

@@ -14,6 +14,8 @@ import {
   deleteDoc,
   serverTimestamp
 } from 'firebase/firestore';
+import { workerNotificationService } from './workerNotificationService';
+
 
 // 1) Helper: get all admins
 async function getAllAdmins() {
@@ -151,6 +153,7 @@ export const adminProjectService = {
         throw new Error('Project not found');
       }
       const projData = projSnap.data();
+      const oldStatus = projData.status;
 
       // update doc
       await updateDoc(projectRef, {
@@ -158,14 +161,18 @@ export const adminProjectService = {
         updatedAt: Timestamp.now(),
       });
 
-      // 2) create notification based on new status
+      // Notify admins
       if (status === 'active') {
         await notifyAdminsOfProjectEvent('started', projectId, projData.name);
+        // ADD THIS: Notify workers project started
+        if (oldStatus !== 'active') {
+          await workerNotificationService.notifyProjectStarted(projectId);
+        }
       } else if (status === 'ended') {
         await notifyAdminsOfProjectEvent('ended', projectId, projData.name);
+        // ADD THIS: Notify workers project ended
+        await workerNotificationService.notifyProjectEnded(projectId);
       }
-      // if 'draft' => we won't do anything special here
-      // If you want a 'draft' notification, add a condition
 
     } catch (error) {
       console.error('Error updating project status:', error);
@@ -223,8 +230,11 @@ export const adminProjectService = {
         updatedAt: Timestamp.now(),
       });
 
-      // 3) notify that project ended
+      // Notify admins that project ended
       await notifyAdminsOfProjectEvent('ended', projectId, projectData.name);
+      
+      // ADD THIS: Notify workers that project ended
+      await workerNotificationService.notifyProjectEnded(projectId);
     } catch (error) {
       console.error('Error ending project:', error);
       throw error;
@@ -250,8 +260,11 @@ export const adminProjectService = {
         updatedAt: Timestamp.now(),
       });
 
-      // 4) notify archived
+      // Notify admins
       await notifyAdminsOfProjectEvent('archived', projectId, projectName);
+      
+      // ADD THIS: Notify workers project archived
+      await workerNotificationService.notifyProjectArchived(projectId);
     } catch (error) {
       console.error('Error archiving project:', error);
       throw error;
@@ -277,8 +290,11 @@ export const adminProjectService = {
         updatedAt: Timestamp.now(),
       });
 
-      // 5) notify unarchived
+      // Notify admins
       await notifyAdminsOfProjectEvent('unarchived', projectId, projectName);
+      
+      // ADD THIS: Notify workers project unarchived
+      await workerNotificationService.notifyProjectUnarchived(projectId);
     } catch (error) {
       console.error('Error unarchiving project:', error);
       throw error;

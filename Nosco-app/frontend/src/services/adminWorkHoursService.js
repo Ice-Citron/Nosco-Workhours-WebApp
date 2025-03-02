@@ -12,6 +12,8 @@ import {
   updateDoc,
   Timestamp
 } from 'firebase/firestore';
+import { workerNotificationService } from '../services/workerNotificationService';
+
 
 /**
  * Helper: compute cost using baseRate for regular hours,
@@ -107,13 +109,50 @@ export const adminWorkHoursService = {
    */
   approveWorkHours: async (workHourId, adminId) => {
     try {
-      const ref = doc(db, 'workHours', workHourId);
-      await updateDoc(ref, {
+      // Get the work hour document first to access worker info and hours
+      const workHourRef = doc(db, 'workHours', workHourId);
+      const workHourSnap = await getDoc(workHourRef);
+      
+      if (!workHourSnap.exists()) {
+        throw new Error('Work hour record not found');
+      }
+      
+      const workHourData = workHourSnap.data();
+      const workerId = workHourData.userID;
+      
+      // Fetch project name for better notification context
+      let projectName = "the project";
+      try {
+        const projectRef = doc(db, 'projects', workHourData.projectID);
+        const projectSnap = await getDoc(projectRef);
+        if (projectSnap.exists()) {
+          projectName = projectSnap.data().name || "the project";
+        }
+      } catch (err) {
+        console.warn('Could not fetch project name for notification:', err);
+      }
+
+      // Update the work hour status
+      await updateDoc(workHourRef, {
         status: 'approved',
         approvedBy: adminId,
         approvalDate: Timestamp.now(),
         updatedAt: Timestamp.now(),
       });
+      
+      // Send notification to worker
+      const totalHours = (workHourData.regularHours || 0) + 
+                        (workHourData.overtime15x || 0) + 
+                        (workHourData.overtime20x || 0);
+      
+      await workerNotificationService.notifyWorkhourApproval(
+        workHourId,
+        totalHours,
+        workerId,
+        projectName
+      );
+      
+      return true;
     } catch (error) {
       console.error('Error approving work hours:', error);
       throw error;
@@ -125,14 +164,47 @@ export const adminWorkHoursService = {
    */
   rejectWorkHours: async (workHourId, adminId, rejectionReason) => {
     try {
-      const ref = doc(db, 'workHours', workHourId);
-      await updateDoc(ref, {
+      // Get the work hour document first
+      const workHourRef = doc(db, 'workHours', workHourId);
+      const workHourSnap = await getDoc(workHourRef);
+      
+      if (!workHourSnap.exists()) {
+        throw new Error('Work hour record not found');
+      }
+      
+      const workHourData = workHourSnap.data();
+      const workerId = workHourData.userID;
+      
+      // Fetch project name for better notification
+      let projectName = "the project";
+      try {
+        const projectRef = doc(db, 'projects', workHourData.projectID);
+        const projectSnap = await getDoc(projectRef);
+        if (projectSnap.exists()) {
+          projectName = projectSnap.data().name || "the project";
+        }
+      } catch (err) {
+        console.warn('Could not fetch project name for notification:', err);
+      }
+      
+      // Update work hour status
+      await updateDoc(workHourRef, {
         status: 'rejected',
         approvedBy: adminId,
         approvalDate: Timestamp.now(),
         rejectionReason,
         updatedAt: Timestamp.now(),
       });
+      
+      // Send notification to worker
+      await workerNotificationService.notifyWorkhourRejection(
+        workHourId,
+        rejectionReason,
+        workerId,
+        projectName
+      );
+      
+      return true;
     } catch (error) {
       console.error('Error rejecting work hours:', error);
       throw error;
@@ -146,16 +218,64 @@ export const adminWorkHoursService = {
     try {
       const batch = writeBatch(db);
       const now = Timestamp.now();
+      
+      // Store promises for notifications to send after batch update
+      const notificationPromises = [];
+      
+      // Process each work hour
       for (const id of workHourIds) {
-        const ref = doc(db, 'workHours', id);
-        batch.update(ref, {
-          status: 'approved',
-          approvedBy: adminId,
-          approvalDate: now,
-          updatedAt: now,
-        });
+        // First get the work hour data
+        const workHourRef = doc(db, 'workHours', id);
+        const workHourSnap = await getDoc(workHourRef);
+        
+        if (workHourSnap.exists()) {
+          const workHourData = workHourSnap.data();
+          const workerId = workHourData.userID;
+          
+          // Update the document in batch
+          batch.update(workHourRef, {
+            status: 'approved',
+            approvedBy: adminId,
+            approvalDate: now,
+            updatedAt: now,
+          });
+          
+          // Fetch project name
+          let projectName = "the project";
+          try {
+            const projectRef = doc(db, 'projects', workHourData.projectID);
+            const projectSnap = await getDoc(projectRef);
+            if (projectSnap.exists()) {
+              projectName = projectSnap.data().name || "the project";
+            }
+          } catch (err) {
+            console.warn('Could not fetch project name for notification:', err);
+          }
+          
+          // Calculate total hours
+          const totalHours = (workHourData.regularHours || 0) + 
+                            (workHourData.overtime15x || 0) + 
+                            (workHourData.overtime20x || 0);
+          
+          // Queue the notification (will be sent after batch commits)
+          notificationPromises.push(
+            workerNotificationService.notifyWorkhourApproval(
+              id,
+              totalHours,
+              workerId,
+              projectName
+            )
+          );
+        }
       }
+      
+      // Commit all updates
       await batch.commit();
+      
+      // Send all notifications
+      await Promise.all(notificationPromises);
+      
+      return true;
     } catch (error) {
       console.error('Error bulk approving work hours:', error);
       throw error;
@@ -169,17 +289,60 @@ export const adminWorkHoursService = {
     try {
       const batch = writeBatch(db);
       const now = Timestamp.now();
+      
+      // Store promises for notifications to send after batch update
+      const notificationPromises = [];
+      
+      // Process each work hour
       for (const id of workHourIds) {
-        const ref = doc(db, 'workHours', id);
-        batch.update(ref, {
-          status: 'rejected',
-          approvedBy: adminId,
-          approvalDate: now,
-          rejectionReason,
-          updatedAt: now,
-        });
+        // Get the work hour data
+        const workHourRef = doc(db, 'workHours', id);
+        const workHourSnap = await getDoc(workHourRef);
+        
+        if (workHourSnap.exists()) {
+          const workHourData = workHourSnap.data();
+          const workerId = workHourData.userID;
+          
+          // Update the document in batch
+          batch.update(workHourRef, {
+            status: 'rejected',
+            approvedBy: adminId,
+            approvalDate: now,
+            rejectionReason,
+            updatedAt: now,
+          });
+          
+          // Fetch project name
+          let projectName = "the project";
+          try {
+            const projectRef = doc(db, 'projects', workHourData.projectID);
+            const projectSnap = await getDoc(projectRef);
+            if (projectSnap.exists()) {
+              projectName = projectSnap.data().name || "the project";
+            }
+          } catch (err) {
+            console.warn('Could not fetch project name for notification:', err);
+          }
+          
+          // Queue the notification (will be sent after batch commits)
+          notificationPromises.push(
+            workerNotificationService.notifyWorkhourRejection(
+              id,
+              rejectionReason,
+              workerId,
+              projectName
+            )
+          );
+        }
       }
+      
+      // Commit all updates
       await batch.commit();
+      
+      // Send all notifications
+      await Promise.all(notificationPromises);
+      
+      return true;
     } catch (error) {
       console.error('Error bulk rejecting work hours:', error);
       throw error;
