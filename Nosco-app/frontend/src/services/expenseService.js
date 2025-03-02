@@ -16,7 +16,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 export const expenseService = {
   submitExpenseClaim: async ({ employeeId, amount, type, receipts, date }) => {
     try {
-      const docRef = await addDoc(collection(firestore, 'expenses'), {
+      const docRef = await addDoc(collection(firestore, 'expense'), {
         employeeId,
         amount,
         type,
@@ -46,7 +46,7 @@ export const expenseService = {
 
   approveExpenseClaim: async (expenseId) => {
     try {
-      const expenseRef = doc(firestore, 'expenses', expenseId);
+      const expenseRef = doc(firestore, 'expense', expenseId);
       await updateDoc(expenseRef, {
         status: 'Approved',
         approvedAt: serverTimestamp()
@@ -58,7 +58,7 @@ export const expenseService = {
 
   rejectExpenseClaim: async (expenseId, reason) => {
     try {
-      const expenseRef = doc(firestore, 'expenses', expenseId);
+      const expenseRef = doc(firestore, 'expense', expenseId);
       await updateDoc(expenseRef, {
         status: 'Rejected',
         rejectionReason: reason,
@@ -92,7 +92,7 @@ export const expenseService = {
   fetchPendingExpenses: async () => {
     try {
       const q = query(
-        collection(firestore, 'expenses'),
+        collection(firestore, 'expense'),
         where('status', '==', 'Pending'),
         orderBy('createdAt', 'desc')
       );
@@ -105,7 +105,7 @@ export const expenseService = {
 
   getExpenseById: async (expenseId) => {
     try {
-      const expenseRef = doc(firestore, 'expenses', expenseId);
+      const expenseRef = doc(firestore, 'expense', expenseId); // Changed from 'expenses' to 'expense'
       const expenseDoc = await getDoc(expenseRef);
       if (!expenseDoc.exists()) {
         throw new Error('Expense not found');

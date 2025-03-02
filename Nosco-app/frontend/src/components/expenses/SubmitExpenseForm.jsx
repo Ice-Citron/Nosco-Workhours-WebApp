@@ -9,7 +9,6 @@ import {
   addDoc,
   Timestamp,
   doc,
-  getDoc,
   getDocs,
   query,
   where
@@ -19,6 +18,8 @@ import DatePicker from '../common/DatePicker';
 import InputField from '../common/InputField';
 import SelectDropdown from '../common/SelectDropdown';
 import Button from '../common/Button';
+import CurrencyInput from '../common/CurrencyInput';
+import currencyService from '../../services/currencyService';
 
 const SubmitExpenseForm = ({ currentProject, onSubmitSuccess }) => {
   const {
@@ -32,14 +33,14 @@ const SubmitExpenseForm = ({ currentProject, onSubmitSuccess }) => {
   const [receipts, setReceipts] = useState([]);
   const [previewUrls, setPreviewUrls] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
+  const [expenseTypes, setExpenseTypes] = useState([]);
+  const [currencyData, setCurrencyData] = useState({
+    amount: '',
+    currency: 'USD',
+    convertedAmount: 0
+  });
 
   const { user } = useAuth();
-
-  // Store the fetched expense types from Firestore
-  const [expenseTypes, setExpenseTypes] = useState([]);
-  // Store the possible currencies and exchange rates from settings/exchangeRates
-  const [currencies, setCurrencies] = useState([]);
-  const [exchangeRates, setExchangeRates] = useState({});
 
   useEffect(() => {
     const fetchExpenseTypes = async () => {
@@ -59,27 +60,16 @@ const SubmitExpenseForm = ({ currentProject, onSubmitSuccess }) => {
       }
     };
 
-    const fetchExchangeRates = async () => {
+    const initializeCurrencyService = async () => {
       try {
-        const docRef = doc(firestore, 'settings', 'exchangeRates');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setCurrencies(
-            (data.selectedCurrencies || []).map((c) => ({ value: c, label: c }))
-          );
-          setExchangeRates(data.rates || {});
-          console.log('[fetchExchangeRates] Loaded exchangeRates:', data.rates);
-        } else {
-          console.log('[fetchExchangeRates] No document found for exchangeRates.');
-        }
+        await currencyService.initialize();
       } catch (err) {
-        console.error('[fetchExchangeRates] ERROR:', err);
+        console.error('[initializeCurrencyService] ERROR:', err);
       }
     };
 
     fetchExpenseTypes();
-    fetchExchangeRates();
+    initializeCurrencyService();
   }, []);
 
   const handleFileUpload = (e) => {
@@ -91,6 +81,8 @@ const SubmitExpenseForm = ({ currentProject, onSubmitSuccess }) => {
   };
 
   const uploadReceipts = async () => {
+    if (receipts.length === 0) return [];
+    
     console.log('[uploadReceipts] user.uid:', user?.uid);
     try {
       const uploadPromises = receipts.map(async (file) => {
@@ -115,47 +107,46 @@ const SubmitExpenseForm = ({ currentProject, onSubmitSuccess }) => {
     try {
       setUploading(true);
       console.log('[onSubmit] formData received from react-hook-form:', formData);
+      console.log('[onSubmit] currencyData:', currencyData);
 
       // 1) Upload files to Storage
       const receiptUrls = await uploadReceipts();
 
-      // 2) Convert user‐entered amount to USD
-      const userAmount = parseFloat(formData.amount || '0');
-      const userCurrency = formData.currency;
-      let convertedUSD = userAmount;
-
-      if (exchangeRates[userCurrency] && exchangeRates[userCurrency] !== 0) {
-        convertedUSD = userAmount / exchangeRates[userCurrency];
-      }
-
-      // 3) Build the final expense data
+      // 2) Build the final expense data
+      const expenseDate = formData.date ? new Date(formData.date) : new Date();
       const expenseData = {
         userID: user.uid,
         projectID: currentProject?.id || null,
         expenseType: formData.expenseType,
-        date: Timestamp.fromDate(new Date(formData.date)),
-        amount: convertedUSD,
-        currency: 'USD',   // always store as USD
+        date: Timestamp.fromDate(expenseDate),
+        amount: currencyData.convertedAmount, // Use converted amount in USD
+        currency: 'USD', // Always store as USD
         paid: false,
-        originalAmount: userAmount,
-        originalCurrency: userCurrency,
+        originalAmount: parseFloat(currencyData.amount),
+        originalCurrency: currencyData.currency,
         description: formData.description || '',
         receipts: receiptUrls,
         status: 'pending',
         createdAt: Timestamp.now(),
         pointsAwarded: null,
-        isGeneralExpense: false,   // <-- explicitly set false for non-admin
+        isGeneralExpense: false, // Explicitly set false for non-admin
       };
 
       console.log('[onSubmit] final expenseData to be added:', expenseData);
 
-      // 4) Save to Firestore
+      // 3) Save to Firestore
       await addDoc(collection(firestore, 'expense'), expenseData);
 
-      // 5) Reset form & visuals
+      // 4) Reset form & visuals
       reset();
       setReceipts([]);
       setPreviewUrls([]);
+      setSelectedDate(''); // Reset the selected date
+      setCurrencyData({
+        amount: '',
+        currency: 'USD',
+        convertedAmount: 0
+      });
       onSubmitSuccess?.();
 
       console.log('[onSubmit] Successfully submitted expense claim.');
@@ -199,30 +190,14 @@ const SubmitExpenseForm = ({ currentProject, onSubmitSuccess }) => {
         error={errors.date}
       />
 
-      <div className="grid grid-cols-2 gap-4">
-        <InputField
-          label="Amount"
-          type="number"
-          step="0.01"
-          min="0"
-          {...register('amount', {
-            required: 'Amount is required',
-            min: { value: 0, message: 'Amount must be positive' }
-          })}
-          error={errors.amount}
-        />
-
-        {currencies.length > 0 ? (
-          <SelectDropdown
-            label="Currency"
-            options={currencies}
-            {...register('currency', { required: 'Currency is required' })}
-            error={errors.currency}
-          />
-        ) : (
-          <p className="text-gray-600">Loading currencies...</p>
-        )}
-      </div>
+      {/* Use the CurrencyInput component instead of separate inputs */}
+      <CurrencyInput
+        label="Amount"
+        value={currencyData}
+        onChange={(data) => setCurrencyData(data)}
+        error={errors.currencyData}
+        required={true}
+      />
 
       <InputField
         label="Description"

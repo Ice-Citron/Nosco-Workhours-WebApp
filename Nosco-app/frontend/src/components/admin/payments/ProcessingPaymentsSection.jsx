@@ -4,6 +4,7 @@ import Table from '../../common/Table';
 import ProcessPaymentModal from './ProcessPaymentModal';
 import { firestore } from '../../../firebase/firebase_config';
 import { collection, getDocs } from 'firebase/firestore';
+import { useAuth } from '../../../context/AuthContext'; // Add this import
 
 const ProcessingPaymentsSection = () => {
   const [payments, setPayments] = useState([]);
@@ -12,6 +13,7 @@ const ProcessingPaymentsSection = () => {
   const [error, setError] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const { user } = useAuth(); // Get the current user from auth context
 
   // Subscribe to payments with status "processing"
   useEffect(() => {
@@ -112,10 +114,10 @@ const ProcessingPaymentsSection = () => {
           }}
           onStatusUpdate={async (paymentId, updateDetails) => {
             try {
-              // Call your updatePaymentStatus method from adminPaymentService:
+              // Use the current admin's actual user ID
               await adminPaymentService.updatePaymentStatus(paymentId, {
                 ...updateDetails,
-                adminId: "YOUR_ADMIN_USER_ID" // Replace with the current admin's ID (or get it from your auth context)
+                adminId: user.uid // Get the current admin's ID from auth context
               });
               console.log('Payment updated successfully');
             } catch (error) {
@@ -123,8 +125,11 @@ const ProcessingPaymentsSection = () => {
             }
           }}
           onCommentAdd={(paymentId, comment) => {
-            // Optional: Call your method to add a comment
-            console.log('Adding comment to payment:', paymentId, comment);
+            // Use the current admin's user ID here too
+            adminPaymentService.addPaymentComment(paymentId, {
+              text: comment,
+              userID: user.uid // Get the admin's ID from auth context
+            });
           }}
         />
       )}

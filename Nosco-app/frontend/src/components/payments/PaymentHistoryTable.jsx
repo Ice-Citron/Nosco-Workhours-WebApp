@@ -1,8 +1,64 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageSquare, Calendar, Building, Check, User } from 'lucide-react';
 import { format } from 'date-fns';
+import { doc, getDoc } from 'firebase/firestore';
+import { firestore } from '../../firebase/firebase_config';
 
 const PaymentHistoryTable = ({ payments, projects, expenses, onRowClick, loading }) => {
+  const [userNames, setUserNames] = useState({});
+  
+  // Fetch user names for all user IDs in comments
+  useEffect(() => {
+    if (!payments || payments.length === 0) return;
+    
+    const fetchUserNames = async () => {
+      // Collect all unique user IDs from payment comments
+      const userIds = new Set();
+      
+      payments.forEach(payment => {
+        if (payment.comments?.userID) {
+          userIds.add(payment.comments.userID);
+        }
+      });
+      
+      // Skip if we don't have any user IDs to fetch
+      if (userIds.size === 0) return;
+      
+      // Create a new object to store fetched names
+      const newUserNames = { ...userNames };
+      
+      // Fetch user details for each ID
+      for (const userId of userIds) {
+        // Skip if we already have this user's name
+        if (newUserNames[userId]) continue;
+        
+        try {
+          const userRef = doc(firestore, 'users', userId);
+          const userDoc = await getDoc(userRef);
+          
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            newUserNames[userId] = userData.name || 'Unknown User';
+          } else {
+            newUserNames[userId] = 'Unknown User';
+          }
+        } catch (error) {
+          console.warn(`Could not fetch user details for ${userId}:`, error);
+          newUserNames[userId] = 'Unknown User';
+        }
+      }
+      
+      setUserNames(newUserNames);
+    };
+    
+    fetchUserNames();
+  }, [payments]);
+
+  // Helper: Get user name from ID, fallback to ID if name not found
+  const getUserName = (userId) => {
+    return userNames[userId] || userId;
+  };
+  
   // Helper: format date
   const formatDate = (date) => {
     if (!date) return '-';
@@ -62,9 +118,11 @@ const PaymentHistoryTable = ({ payments, projects, expenses, onRowClick, loading
           <div className="flex flex-col">
             <span className="font-medium">
               {paymentType
-                .replace(/([A-Z])/g, ' $1')
-                .replace(/^./, (str) => str.toUpperCase())
-                .trim()}
+                ? paymentType
+                    .replace(/([A-Z])/g, ' $1')
+                    .replace(/^./, (str) => str.toUpperCase())
+                    .trim()
+                : 'Unknown Type'}
             </span>
             <span className="text-sm text-gray-600">
               {new Intl.NumberFormat('en-US', {
@@ -139,18 +197,22 @@ const PaymentHistoryTable = ({ payments, projects, expenses, onRowClick, loading
         if (!comment) {
           return <span className="text-gray-400 text-sm">No comments</span>;
         }
+        
+        // Get the user's display name using the helper function
+        const userName = getUserName(comment.userID);
+        
         return (
           <div className="relative group">
             <div className="flex items-center gap-1 text-blue-600 cursor-pointer">
               <MessageSquare className="h-4 w-4" />
-              <span className="text-sm">From: {comment.userID}</span>
+              <span className="text-sm">From: {userName}</span>
             </div>
             {/* Hover tooltip */}
             <div className="absolute z-10 invisible group-hover:visible bg-white border rounded-lg shadow-lg p-3 min-w-[300px] right-0 mt-1">
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <User className="h-3 w-3" />
-                  <span>{comment.userID}</span>
+                  <span>{userName}</span>
                 </div>
                 <div className="text-sm font-medium">{comment.text}</div>
                 <div className="text-xs text-gray-500">
