@@ -13,6 +13,8 @@ import {
   orderBy,
   writeBatch
 } from 'firebase/firestore';
+import currencyService from './currencyService';
+
 
 export const adminExpenseService = {
   // Get all expense types
@@ -627,6 +629,85 @@ export const adminExpenseService = {
     } catch (error) {
       console.error('Error marking expenses as paid:', error);
       throw error;
+    }
+  },
+
+  // Validate expense amount against policy limit
+  validateExpenseAmount: async (amount, currency, expenseType) => {
+    try {
+      // Skip validation if any required parameter is missing
+      if (!amount || !currency || !expenseType) {
+        return { isValid: true, message: '' };
+      }
+
+      // Get the expense type details if string name was provided
+      let expenseTypeDetails = expenseType;
+      if (typeof expenseType === 'string') {
+        const expenseTypes = await adminExpenseService.getExpenseTypes();
+        expenseTypeDetails = expenseTypes.find(type => type.name === expenseType);
+        
+        if (!expenseTypeDetails) {
+          return { isValid: true, message: '' }; // Type not found, skip validation
+        }
+      }
+      
+      // Skip validation if policy limit isn't set
+      if (!expenseTypeDetails.policyLimit) {
+        return { isValid: true, message: '' };
+      }
+
+      // Get the amount in USD for comparison with policy limit
+      let amountInUSD = parseFloat(amount);
+      if (currency !== 'USD') {
+        // Use the currencyService for conversion
+        try {
+          // Ensure currencyService is initialized
+          await currencyService.initialize();
+          amountInUSD = currencyService.convertCurrency(
+            amountInUSD,
+            currency,
+            'USD'
+          );
+        } catch (error) {
+          console.error('Error converting currency:', error);
+          return { isValid: true, message: '' }; // Skip validation on currency conversion error
+        }
+      }
+
+      // Compare with policy limit
+      if (amountInUSD > expenseTypeDetails.policyLimit) {
+        const formattedLimit = currencyService.formatCurrency(expenseTypeDetails.policyLimit, 'USD');
+        const formattedAmount = currencyService.formatCurrency(amountInUSD, 'USD');
+        
+        return {
+          isValid: false,
+          message: `The amount (${formattedAmount}) exceeds the policy limit of ${formattedLimit} for ${expenseTypeDetails.name}. Please submit an additional expense note if absolutely necessary and contact the admin to explain why it exceeds normal costs.`
+        };
+      }
+
+      return { isValid: true, message: '' };
+    } catch (error) {
+      console.error('Error validating expense amount:', error);
+      return { isValid: true, message: '' }; // Skip validation on error
+    }
+  },
+
+  // Convert any currency to USD
+  convertToUSD: async (amount, currency) => {
+    if (!amount || isNaN(amount) || currency === 'USD') {
+      return parseFloat(amount) || 0;
+    }
+    
+    try {
+      await currencyService.initialize();
+      return currencyService.convertCurrency(
+        parseFloat(amount),
+        currency,
+        'USD'
+      );
+    } catch (error) {
+      console.error('Error converting to USD:', error);
+      return parseFloat(amount) || 0; // Return original amount on error
     }
   },
  };

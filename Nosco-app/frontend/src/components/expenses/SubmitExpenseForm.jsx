@@ -26,33 +26,52 @@ const SubmitExpenseForm = ({ currentProject, onSubmitSuccess }) => {
     register,
     handleSubmit,
     formState: { errors },
-    reset
+    reset,
+    watch
   } = useForm();
+  
+  const watchExpenseType = watch('expenseType');
 
   const [uploading, setUploading] = useState(false);
   const [receipts, setReceipts] = useState([]);
   const [previewUrls, setPreviewUrls] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
   const [expenseTypes, setExpenseTypes] = useState([]);
+  const [fullExpenseTypeData, setFullExpenseTypeData] = useState([]);
   const [currencyData, setCurrencyData] = useState({
     amount: '',
     currency: 'USD',
     convertedAmount: 0
   });
+  const [validationError, setValidationError] = useState('');
 
   const { user } = useAuth();
+
+  // Get the selected expense type data
+  const selectedExpenseType = watchExpenseType ? 
+    fullExpenseTypeData.find(type => type.name === watchExpenseType) : null;
 
   useEffect(() => {
     const fetchExpenseTypes = async () => {
       try {
+        // Get all expense types including their full data
         const expenseTypesRef = collection(firestore, 'expenseTypes');
         const qExp = query(expenseTypesRef, where('isArchived', '==', false));
         const snap = await getDocs(qExp);
 
-        const typesList = snap.docs.map((docSnap) => {
-          const data = docSnap.data();
-          return { value: data.name, label: data.name };
-        });
+        const fullData = snap.docs.map(docSnap => ({
+          id: docSnap.id,
+          ...docSnap.data()
+        }));
+        
+        setFullExpenseTypeData(fullData);
+        
+        // Create dropdown options
+        const typesList = fullData.map(type => ({ 
+          value: type.name, 
+          label: type.name 
+        }));
+        
         setExpenseTypes(typesList);
         console.log('[fetchExpenseTypes] Loaded expenseTypes:', typesList);
       } catch (err) {
@@ -71,6 +90,36 @@ const SubmitExpenseForm = ({ currentProject, onSubmitSuccess }) => {
     fetchExpenseTypes();
     initializeCurrencyService();
   }, []);
+
+  // Validate the expense amount against policy limit
+  useEffect(() => {
+    const validateAmount = async () => {
+      if (selectedExpenseType && currencyData.amount) {
+        // Convert amount to USD
+        const amountInUSD = currencyService.convertCurrency(
+          parseFloat(currencyData.amount) || 0,
+          currencyData.currency,
+          'USD'
+        );
+        
+        // Compare with policy limit
+        if (amountInUSD > selectedExpenseType.policyLimit) {
+          const formattedLimit = currencyService.formatCurrency(selectedExpenseType.policyLimit, 'USD');
+          const formattedAmount = currencyService.formatCurrency(amountInUSD, 'USD');
+          
+          setValidationError(
+            `The amount (${formattedAmount}) exceeds the policy limit of ${formattedLimit} for ${selectedExpenseType.name}. Please submit an additional expense note if absolutely necessary and contact the admin to explain why it exceeds normal costs.`
+          );
+        } else {
+          setValidationError('');
+        }
+      } else {
+        setValidationError('');
+      }
+    };
+    
+    validateAmount();
+  }, [selectedExpenseType, currencyData.amount, currencyData.currency]);
 
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
@@ -104,6 +153,11 @@ const SubmitExpenseForm = ({ currentProject, onSubmitSuccess }) => {
   };
 
   const onSubmit = async (formData) => {
+    // Don't submit if there's a validation error
+    if (validationError) {
+      return;
+    }
+    
     try {
       setUploading(true);
       console.log('[onSubmit] formData received from react-hook-form:', formData);
@@ -162,12 +216,21 @@ const SubmitExpenseForm = ({ currentProject, onSubmitSuccess }) => {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Expense Type */}
       {expenseTypes.length > 0 ? (
-        <SelectDropdown
-          label="Expense Type"
-          options={expenseTypes}
-          {...register('expenseType', { required: 'Expense type is required' })}
-          error={errors.expenseType}
-        />
+        <>
+          <SelectDropdown
+            label="Expense Type"
+            options={expenseTypes}
+            {...register('expenseType', { required: 'Expense type is required' })}
+            error={errors.expenseType}
+          />
+          
+          {/* Show policy limit if expense type is selected */}
+          {selectedExpenseType && (
+            <div className="text-sm text-gray-600">
+              Policy limit: {currencyService.formatCurrency(selectedExpenseType.policyLimit, 'USD')}
+            </div>
+          )}
+        </>
       ) : (
         <p className="text-gray-600">Loading expense types...</p>
       )}
@@ -190,14 +253,23 @@ const SubmitExpenseForm = ({ currentProject, onSubmitSuccess }) => {
         error={errors.date}
       />
 
-      {/* Use the CurrencyInput component instead of separate inputs */}
-      <CurrencyInput
-        label="Amount"
-        value={currencyData}
-        onChange={(data) => setCurrencyData(data)}
-        error={errors.currencyData}
-        required={true}
-      />
+      {/* Currency Input with validation */}
+      <div>
+        <CurrencyInput
+          label="Amount"
+          value={currencyData}
+          onChange={(data) => setCurrencyData(data)}
+          error={errors.currencyData}
+          required={true}
+        />
+        
+        {/* Display validation error */}
+        {validationError && (
+          <div className="mt-2 text-sm text-red-600">
+            {validationError}
+          </div>
+        )}
+      </div>
 
       <InputField
         label="Description"
@@ -273,7 +345,11 @@ const SubmitExpenseForm = ({ currentProject, onSubmitSuccess }) => {
         </div>
       </div>
 
-      <Button type="submit" disabled={uploading} className="w-full">
+      <Button 
+        type="submit" 
+        disabled={uploading || !!validationError} 
+        className={`w-full ${validationError ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
         {uploading ? 'Submitting...' : 'Submit Expense Claim'}
       </Button>
     </form>
