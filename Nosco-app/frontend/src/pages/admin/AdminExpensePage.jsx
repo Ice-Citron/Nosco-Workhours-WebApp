@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import Tab from '../../components/common/Tab';
 import ExpenseApprovalSection from '../../components/admin/expenses/ExpenseApprovalSection';
-import ExpenseTypeSection from '../../components/admin/expenses/ExpenseTypeSection';
-import GeneralExpenseSection from '../../components/admin/expenses/GeneralExpenseSection';
+import ExpenseTypeSection from '../../components/admin/expenses/ExpenseTypeSection/ExpenseTypeSection';
+import GeneralExpenseSection from '../../components/admin/expenses/GeneralExpenseSection/GeneralExpenseSection';
 
 const AdminExpensePage = () => {
   const [activeTab, setActiveTab] = useState('approvals');
