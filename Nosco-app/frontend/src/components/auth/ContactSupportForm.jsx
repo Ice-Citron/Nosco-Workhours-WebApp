@@ -26,11 +26,15 @@ const ContactSupportForm = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await sendSupportInquiry(formData);
-      setNotification({ type: 'success', message: 'Your inquiry has been sent successfully.' });
+      await sendSupportInquiry({
+        subject: formData.subject,
+        message: formData.message
+        // No need to pass name, email, phone as those will be taken from the current user
+      });
+      setNotification({ type: 'success', message: 'Your feedback has been sent successfully.' });
       setTimeout(() => navigate('/'), 3000); // Redirect to home after 3 seconds
     } catch (error) {
-      setNotification({ type: 'error', message: 'Failed to send inquiry. Please try again.' });
+      setNotification({ type: 'error', message: error.message || 'Failed to send feedback. Please try again.' });
     }
     setLoading(false);
   };

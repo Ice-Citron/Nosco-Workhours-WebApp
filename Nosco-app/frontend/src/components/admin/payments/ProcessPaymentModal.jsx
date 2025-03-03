@@ -220,26 +220,39 @@ const ProcessPaymentModal = ({
                       className="w-full p-2 border rounded-md focus:ring-1 focus:ring-blue-500"
                     >
                       <option value="">Select a bank account</option>
-                      {userBankAccounts.map((account) => (
-                        <option key={account.id} value={account.id}>
-                          {account.bankName}: {account.accountNumber} ({account.accountName})
-                        </option>
-                      ))}
+                      {/* Sort accounts to put default first */}
+                      {[...userBankAccounts]
+                        .sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
+                        .map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {account.bankName}: {account.accountNumber} {account.isDefault ? '(Default)' : ''}
+                          </option>
+                        ))}
                     </select>
                     
                     {selectedBankAccount && (
                       <div className="bg-blue-50 border border-blue-200 rounded-md p-3 flex items-start">
                         <CreditCard className="h-5 w-5 text-blue-500 mr-2 mt-0.5" />
                         <div>
-                          <p className="text-sm font-medium text-blue-700">
-                            {userBankAccounts.find(acc => acc.id === selectedBankAccount)?.bankName}
-                          </p>
-                          <p className="text-sm text-blue-600">
-                            Account: {userBankAccounts.find(acc => acc.id === selectedBankAccount)?.accountNumber}
-                          </p>
-                          <p className="text-xs text-blue-500 mt-1">
-                            This bank account will be referenced in the payment comment
-                          </p>
+                          {(() => {
+                            const selectedAccount = userBankAccounts.find(acc => acc.id === selectedBankAccount);
+                            return (
+                              <>
+                                <p className="text-sm font-medium text-blue-700">
+                                  {selectedAccount?.bankName} 
+                                  {selectedAccount?.isDefault && 
+                                    <span className="ml-2 px-2 py-0.5 bg-blue-200 text-blue-800 text-xs rounded-full">Default</span>
+                                  }
+                                </p>
+                                <p className="text-sm text-blue-600">
+                                  Account: {selectedAccount?.accountNumber}
+                                </p>
+                                <p className="text-xs text-blue-500 mt-1">
+                                  This bank account will be referenced in the payment comment
+                                </p>
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     )}
