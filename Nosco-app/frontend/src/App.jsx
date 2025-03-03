@@ -23,7 +23,7 @@ import WorkHoursHistoryPage from './pages/worker/WorkHoursHistoryPage';
 import ExpensesLayout from './components/expenses/ExpensesLayout';
 import ExpenseHistoryPage from './pages/worker/ExpenseHistoryPage';
 import PaymentHistoryPage from './pages/worker/PaymentHistoryPage';
-import NotificationsPage from './pages/worker/NotificationsPage';
+import NotificationsPage from './pages/worker/WorkerNotificationsPage';
 import FeedbackPage from './pages/worker/FeedbackPage';
 
 import AdminLayout from './components/layout/AdminLayout';

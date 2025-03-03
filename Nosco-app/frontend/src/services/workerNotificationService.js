@@ -11,6 +11,10 @@ import {
   doc,
   getDoc,
   writeBatch,
+  orderBy,
+  updateDoc,
+  deleteDoc,
+  getCountFromServer,
 } from 'firebase/firestore';
 
 export const workerNotificationService = {
@@ -418,6 +422,128 @@ export const workerNotificationService = {
       link: '/worker/payments'
     };
     return await workerNotificationService.createNotification(notificationData);
+  },
+
+  /**
+   * Get all notifications for a specific worker
+   * @param {string} userId - The worker's user ID
+   * @returns {Promise<Array>} - Array of notification objects
+   */
+  getNotificationsForWorker: async (userId) => {
+    try {
+      const notificationsRef = collection(firestore, 'notifications');
+      const q = query(
+        notificationsRef,
+        where('userID', '==', userId),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.() || new Date(doc.data().createdAt)
+      }));
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Mark a single notification as read
+   * @param {string} notificationId - The notification ID to mark as read
+   */
+  markNotificationAsRead: async (notificationId) => {
+    try {
+      const notificationRef = doc(firestore, 'notifications', notificationId);
+      await updateDoc(notificationRef, {
+        read: true,
+        readAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Mark multiple notifications as read
+   * @param {Array<string>} notificationIds - Array of notification IDs to mark as read
+   */
+  markMultipleNotificationsAsRead: async (notificationIds) => {
+    try {
+      const batch = writeBatch(firestore);
+      
+      notificationIds.forEach(id => {
+        const notificationRef = doc(firestore, 'notifications', id);
+        batch.update(notificationRef, {
+          read: true,
+          readAt: serverTimestamp()
+        });
+      });
+      
+      await batch.commit();
+    } catch (error) {
+      console.error('Error marking multiple notifications as read:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete a single notification
+   * @param {string} notificationId - The notification ID to delete
+   */
+  deleteNotification: async (notificationId) => {
+    try {
+      const notificationRef = doc(firestore, 'notifications', notificationId);
+      await deleteDoc(notificationRef);
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete multiple notifications
+   * @param {Array<string>} notificationIds - Array of notification IDs to delete
+   */
+  deleteMultipleNotifications: async (notificationIds) => {
+    try {
+      const batch = writeBatch(firestore);
+      
+      notificationIds.forEach(id => {
+        const notificationRef = doc(firestore, 'notifications', id);
+        batch.delete(notificationRef);
+      });
+      
+      await batch.commit();
+    } catch (error) {
+      console.error('Error deleting multiple notifications:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get the count of unread notifications for a worker
+   * @param {string} userId - The worker's user ID
+   * @returns {Promise<number>} - Number of unread notifications
+   */
+  getUnreadNotificationsCount: async (userId) => {
+    try {
+      const notificationsRef = collection(firestore, 'notifications');
+      const q = query(
+        notificationsRef,
+        where('userID', '==', userId),
+        where('read', '==', false)
+      );
+      
+      const snapshot = await getCountFromServer(q);
+      return snapshot.data().count;
+    } catch (error) {
+      console.error('Error getting unread notifications count:', error);
+      return 0;
+    }
   },
 };
 

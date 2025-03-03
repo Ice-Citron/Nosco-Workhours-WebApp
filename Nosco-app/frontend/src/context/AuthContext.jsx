@@ -1,3 +1,5 @@
+// Nosco-app/frontend/src/context/AuthContext.jsx
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { auth, firestore } from '../firebase/firebase_config';
 import { 

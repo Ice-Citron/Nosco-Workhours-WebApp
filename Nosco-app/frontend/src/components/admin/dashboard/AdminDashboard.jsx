@@ -1,9 +1,7 @@
 // src/components/dashboard/AdminDashboard.jsx
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom'; // Add Link import
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
-import { nextWednesday } from 'date-fns';
-import WorkerManagementPage from '../../../pages/admin/WorkerManagementPage';
 
 const AdminDashboard = ({ metrics }) => {
   const navigate = useNavigate();
@@ -23,6 +21,7 @@ const AdminDashboard = ({ metrics }) => {
     { title: "Settings", path: "/admin/settings" },
   ];
 
+  // Updated quick actions as requested
   const quickActions = [
     { 
       title: 'Approve Work Hours', 
@@ -36,16 +35,16 @@ const AdminDashboard = ({ metrics }) => {
     },
     { 
       title: 'Manage Project Invitations', 
-      path: '/admin/project-invitations',
+      path: '/admin/projects',
       badge: metrics.pendingInvitations 
     },
     { 
       title: 'Add New Worker', 
-      path: '/admin/workers/new' 
+      path: '/admin/workers/' 
     },
     { 
       title: 'Add New Project', 
-      path: '/admin/projects/new' 
+      path: '/admin/projects/' 
     }
   ];
 
@@ -79,33 +78,58 @@ const AdminDashboard = ({ metrics }) => {
         </p>
       </div>
 
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-        <MetricCard
-          title="Pending Work Hours"
-          value={metrics.pendingWorkHours}
-          type="pending"
-        />
-        <MetricCard
-          title="Pending Expenses"
-          value={metrics.pendingExpenses}
-          type="pending"
-        />
-        <MetricCard
-          title="Project Invitations"
-          value={metrics.pendingInvitations}
-          type="pending"
-        />
-        <MetricCard
-          title="Expenses This Month"
-          value={`$${metrics.totalExpensesThisMonth.toLocaleString()}`}
-          type="money"
-        />
-        <MetricCard
-          title="Payments Processed"
-          value={metrics.totalPaymentsProcessed}
-          type="default"
-        />
+      {/* Pending Items Summary - First Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-gray-900">Work Hours</h3>
+          <p className="mt-2 text-3xl font-bold text-nosco-red">{metrics.pendingWorkHours}</p>
+          <p className="text-sm text-gray-500">Pending approvals</p>
+        </div>
+        
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-gray-900">Expenses</h3>
+          <p className="mt-2 text-3xl font-bold text-nosco-red">{metrics.pendingExpenses}</p>
+          <p className="text-sm text-gray-500">Pending approvals</p>
+        </div>
+        
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-gray-900">Amount Due</h3>
+          <p className="mt-2 text-3xl font-bold text-nosco-red">${metrics.amountDue?.toFixed(2) || '0.00'}</p>
+          <p className="text-sm text-gray-500">Approved, not paid</p>
+        </div>
+        
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-gray-900">Payment Processing</h3>
+          <p className="mt-2 text-3xl font-bold text-nosco-red">${metrics.paymentProcessingAmount?.toFixed(2) || '0.00'}</p>
+          <p className="text-sm text-gray-500">{metrics.paymentsProcessing} payments</p>
+        </div>
+      </div>
+
+      {/* Additional Metrics - Second Row (Fixed Styling) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-gray-900">Project Invitations</h3>
+          <p className="mt-2 text-3xl font-bold text-nosco-red">{metrics.pendingInvitations}</p>
+          <p className="text-sm text-gray-500">Awaiting response</p>
+        </div>
+        
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-gray-900">Active Workers</h3>
+          <p className="mt-2 text-3xl font-bold text-gray-800">{metrics.activeWorkers || 0}</p>
+          <p className="text-sm text-gray-500">Currently employed</p>
+        </div>
+        
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-gray-900">Expenses This Month</h3>
+          <p className="mt-2 text-3xl font-bold text-green-600">${metrics.totalExpensesThisMonth?.toFixed(2) || '0.00'}</p>
+          <p className="text-sm text-gray-500">Total approved</p>
+        </div>
+        
+        <div className="bg-white shadow rounded-lg p-6">
+          <h3 className="text-lg font-medium text-gray-900">Payments This Month</h3>
+          <p className="mt-2 text-3xl font-bold text-green-600">${metrics.totalPaymentsThisMonth?.toFixed(2) || '0.00'}</p>
+          <p className="text-sm text-gray-500">{metrics.totalPaymentsProcessed || 0} payments processed</p>
+        </div>
       </div>
 
       {/* Quick Actions */}
@@ -131,19 +155,5 @@ const AdminDashboard = ({ metrics }) => {
     </div>
   );
 };
-
-// Helper component for metrics display
-const MetricCard = ({ title, value, type }) => (
-  <div className="bg-white p-4 rounded-lg shadow">
-    <h3 className="text-gray-600 text-sm font-medium">{title}</h3>
-    <p className={`text-2xl font-bold mt-2 ${
-      type === 'pending' ? 'text-nosco-red' : 
-      type === 'money' ? 'text-green-600' : 
-      'text-gray-900'
-    }`}>
-      {value}
-    </p>
-  </div>
-);
 
 export default AdminDashboard;
