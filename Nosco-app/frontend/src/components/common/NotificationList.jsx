@@ -20,22 +20,17 @@ const NotificationList = ({ notifications }) => {
           <ul className="divide-y divide-gray-200">
             {notifications.map((notification) => (
               <li key={notification.id} className="p-4 hover:bg-gray-50">
-                <Link 
-                  to={notification.link || '#'} 
-                  className="block no-underline"
-                >
-                  <div className="flex justify-between">
-                    <p className={`text-sm font-medium ${notification.read ? 'text-gray-900' : 'text-nosco-red'}`}>
-                      {notification.title}
+                <div className="flex justify-between">
+                  <p className={`text-sm font-medium ${notification.read ? 'text-gray-900' : 'text-nosco-red'}`}>
+                    {notification.title}
+                  </p>
+                  {notification.createdAt && (
+                    <p className="text-xs text-gray-500">
+                      {formatDate(notification.createdAt)}
                     </p>
-                    {notification.createdAt && (
-                      <p className="text-xs text-gray-500">
-                        {formatDate(notification.createdAt)}
-                      </p>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-700 mt-1">{notification.message}</p>
-                </Link>
+                  )}
+                </div>
+                <p className="text-sm text-gray-700 mt-1">{notification.message}</p>
               </li>
             ))}
           </ul>

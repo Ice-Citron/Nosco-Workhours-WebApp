@@ -149,7 +149,7 @@ export const adminPaymentService = {
         timestamp: Timestamp.fromDate(new Date()),
       };
   
-      await updateDoc(paymentRef, {
+      const updateData = {
         status: newStatus,
         paymentMethod,
         referenceNumber,
@@ -159,9 +159,19 @@ export const adminPaymentService = {
           userID: adminId,
           createdAt: Timestamp.fromDate(new Date()),
         },
-        processingHistory: arrayUnion(historyEntry),
-        selectedBankAccount: selectedBankAccount || paymentData.selectedBankAccount
-      });
+        processingHistory: arrayUnion(historyEntry)
+      };
+      
+      // Only include selectedBankAccount if it's not undefined
+      if (selectedBankAccount !== undefined) {
+        updateData.selectedBankAccount = selectedBankAccount || "";
+      } else if (paymentData.selectedBankAccount !== undefined) {
+        updateData.selectedBankAccount = paymentData.selectedBankAccount;
+      } else {
+        updateData.selectedBankAccount = "";
+      }
+      
+      await updateDoc(paymentRef, updateData);
   
       // Send notifications to worker based on payment status change
       if (paymentData.userID) {

@@ -4,13 +4,15 @@ import { X, AlertCircle, CheckCircle, Clock, MessageSquare, CreditCard } from 'l
 import { format } from 'date-fns';
 import { doc, getDoc } from 'firebase/firestore';
 import { firestore } from '../../../firebase/firebase_config';
+import { adminPaymentService } from '../../../services/adminPaymentService';
 
 const ProcessPaymentModal = ({ 
   payment, 
   isOpen, 
   onClose, 
   onStatusUpdate,
-  onCommentAdd 
+  onCommentAdd,
+  adminId // Make sure this prop is passed from the parent
 }) => {
   const [paymentMethod, setPaymentMethod] = useState(payment?.paymentMethod || '');
   const [referenceNumber, setReferenceNumber] = useState(payment?.referenceNumber || '');
@@ -37,8 +39,6 @@ const ProcessPaymentModal = ({
           setUserDetails(userData);
           
           // Extract bank accounts from user data
-          // Assuming bank accounts are stored in user document as an array of objects
-          // with structure like: { id: string, accountName: string, accountNumber: string, bankName: string }
           const bankAccounts = userData.bankAccounts || [];
           setUserBankAccounts(bankAccounts);
         }
@@ -58,6 +58,8 @@ const ProcessPaymentModal = ({
       setPaymentMethod(payment.paymentMethod || '');
       setReferenceNumber(payment.referenceNumber || '');
       setSelectedBankAccount(''); // Reset selected bank account
+      setNewStatus(''); // Reset status
+      setComment(''); // Reset comment
     }
   }, [payment]);
 
@@ -67,15 +69,10 @@ const ProcessPaymentModal = ({
       const selectedAccount = userBankAccounts.find(acc => acc.id === selectedBankAccount);
       if (selectedAccount) {
         const bankAccountInfo = `${selectedAccount.bankName} (${selectedAccount.accountNumber})`;
-        const bankComment = `Sent to ${bankAccountInfo}`;
+        const statusTemplate = getCommentTemplate(newStatus);
         
-        // Update comment to include bank account info
-        // If there's already content in the comment, append to it
-        if (comment && !comment.includes(bankAccountInfo)) {
-          setComment(`${bankComment} // Admin comment: ${comment}`);
-        } else {
-          setComment(`${bankComment} // Admin comment: `);
-        }
+        // Create a new comment with bank info
+        setComment(`Sent to ${bankAccountInfo} // ${statusTemplate}`);
       }
     }
   }, [selectedBankAccount, newStatus, userBankAccounts]);
@@ -104,36 +101,45 @@ const ProcessPaymentModal = ({
   };
 
   const getCommentTemplate = (status) => {
-    const selectedAccount = userBankAccounts.find(acc => acc.id === selectedBankAccount);
-    const bankInfo = selectedAccount 
-      ? `Sent to ${selectedAccount.bankName} (${selectedAccount.accountNumber})`
-      : '';
-    
     switch (status) {
       case 'processing':
-        return `${bankInfo ? `${bankInfo} // ` : ''}Payment being processed via ${paymentMethod}. Reference: ${referenceNumber}. `;
+        return `Payment being processed via ${paymentMethod || '[payment method]'}. Reference: ${referenceNumber || '[reference]'}.`;
       case 'completed':
-        return `${bankInfo ? `${bankInfo} // ` : ''}Payment completed. Final reference: ${referenceNumber}. `;
+        return `Payment completed. Final reference: ${referenceNumber || '[reference]'}.`;
       case 'failed':
-        return `${bankInfo ? `${bankInfo} // ` : ''}Payment failed. Reason: `;
+        return `Payment failed. Reason: `;
       default:
-        return bankInfo ? `${bankInfo} // ` : '';
+        return '';
     }
   };
 
   const handleStatusUpdate = async (e) => {
     e.preventDefault();
-    if (!comment.trim()) return;
-
+    if (!comment.trim() || !newStatus || !paymentMethod) return;
+  
     setLoading(true);
     try {
-      await onStatusUpdate(payment.id, {
+      // Call the service directly with the admin ID from props
+      await adminPaymentService.updatePaymentStatus(payment.id, {
         newStatus,
         paymentMethod,
         referenceNumber,
         comment,
-        selectedBankAccount: selectedBankAccount || null
+        adminId, // Use admin ID from props
+        selectedBankAccount: selectedBankAccount || "" // Change null to "" for empty string
       });
+      
+      // Notify parent component that an update occurred
+      if (onStatusUpdate) {
+        onStatusUpdate(payment.id, {
+          newStatus,
+          paymentMethod,
+          referenceNumber,
+          comment,
+          selectedBankAccount: selectedBankAccount || "" // Change here too for consistency
+        });
+      }
+      
       onClose();
     } catch (error) {
       console.error('Error updating payment status:', error);
@@ -144,23 +150,35 @@ const ProcessPaymentModal = ({
 
   const handleStatusChange = (status) => {
     setNewStatus(status);
-    setComment(getCommentTemplate(status));
+    // Only set comment template if there isn't already one
+    if (!comment || comment === getCommentTemplate(newStatus)) {
+      setComment(getCommentTemplate(status));
+    }
   };
 
   const handleBankAccountChange = (accountId) => {
     setSelectedBankAccount(accountId);
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'pending':
-        return <Clock className="h-5 w-5 text-yellow-500" />;
-      case 'processing':
-        return <AlertCircle className="h-5 w-5 text-blue-500" />;
-      case 'completed':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
-      default:
-        return null;
+  const handleAddComment = async () => {
+    if (!comment.trim()) return;
+    
+    setLoading(true);
+    try {
+      await adminPaymentService.addStandaloneComment(payment.id, {
+        text: comment,
+        adminId // Use admin ID from props
+      });
+      
+      if (onCommentAdd) {
+        onCommentAdd(payment.id, comment);
+      }
+      
+      setComment('');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -322,7 +340,7 @@ const ProcessPaymentModal = ({
               </div>
               <button
                 type="submit"
-                disabled={loading || !newStatus || !comment.trim()}
+                disabled={loading || !newStatus || !comment.trim() || !paymentMethod}
                 className="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-300"
               >
                 {loading ? 'Updating...' : 'Update Payment Status'}
@@ -387,13 +405,9 @@ const ProcessPaymentModal = ({
                 />
                 <button
                   type="button"
-                  onClick={() => {
-                    if (comment.trim()) {
-                      onCommentAdd(payment.id, comment);
-                      setComment('');
-                    }
-                  }}
-                  className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600"
+                  onClick={handleAddComment}
+                  disabled={loading || !comment.trim()}
+                  className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:bg-gray-300"
                 >
                   Add Comment
                 </button>

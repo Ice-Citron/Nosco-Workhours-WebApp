@@ -7,7 +7,7 @@ const Footer = () => {
       <div className="container mx-auto px-4">
         <div className="flex flex-col md:flex-row justify-between items-center">
           <div className="mb-4 md:mb-0">
-            <p className="text-base">&copy; 2024 Nosco. All rights reserved.</p>
+            <p className="text-base">&copy; 2025 Nosco. All rights reserved.</p>
           </div>
           <nav>
             <ul className="flex space-x-8">

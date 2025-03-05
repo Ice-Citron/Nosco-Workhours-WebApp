@@ -104,35 +104,36 @@ const ProcessingPaymentsSection = () => {
         />
       )}
 
-      {selectedPayment && (
-        <ProcessPaymentModal
-          payment={selectedPayment}
-          isOpen={modalOpen}
-          onClose={() => {
-            setModalOpen(false);
-            setSelectedPayment(null);
-          }}
-          onStatusUpdate={async (paymentId, updateDetails) => {
-            try {
-              // Use the current admin's actual user ID
-              await adminPaymentService.updatePaymentStatus(paymentId, {
-                ...updateDetails,
-                adminId: user.uid // Get the current admin's ID from auth context
-              });
-              console.log('Payment updated successfully');
-            } catch (error) {
-              console.error('Error updating payment status:', error);
-            }
-          }}
-          onCommentAdd={(paymentId, comment) => {
-            // Use the current admin's user ID here too
-            adminPaymentService.addPaymentComment(paymentId, {
-              text: comment,
-              userID: user.uid // Get the admin's ID from auth context
-            });
-          }}
-        />
-      )}
+  {selectedPayment && (
+    <ProcessPaymentModal
+      payment={selectedPayment}
+      isOpen={modalOpen}
+      onClose={() => {
+        setModalOpen(false);
+        setSelectedPayment(null);
+      }}
+      onStatusUpdate={async (paymentId, updateDetails) => {
+        try {
+          // Use the current admin's actual user ID
+          await adminPaymentService.updatePaymentStatus(paymentId, {
+            ...updateDetails,
+            adminId: user.uid // Get the current admin's ID from auth context
+          });
+          console.log('Payment updated successfully');
+        } catch (error) {
+          console.error('Error updating payment status:', error);
+        }
+      }}
+      onCommentAdd={(paymentId, comment) => {
+        // Use the current admin's user ID here too
+        adminPaymentService.addPaymentComment(paymentId, {
+          text: comment,
+          userID: user.uid // Get the admin's ID from auth context
+        });
+      }}
+      adminId={user.uid} // Add this line to pass the admin ID to the modal
+    />
+  )}
     </div>
   );
 };

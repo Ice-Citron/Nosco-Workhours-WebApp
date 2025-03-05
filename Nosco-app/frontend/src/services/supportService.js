@@ -1,4 +1,4 @@
-import { app } from '../firebase/firebase_config'; // auth, firestore, storage, app <-- full module
+import { app } from '../firebase/firebase_config';
 import { getFirestore, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import emailjs from '@emailjs/browser';
@@ -6,64 +6,92 @@ import emailjs from '@emailjs/browser';
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Replace these with your actual EmailJS credentials
-const EMAILJS_SERVICE_ID = 'service_hyudouh';  // From your EmailJS dashboard
-const EMAILJS_TEMPLATE_ID = 'template_ec25lfd'; // From your EmailJS dashboard
-const EMAILJS_PUBLIC_KEY = 'x79I4B5lifhvNyXSY'; // From your EmailJS account page
+// EmailJS credentials
+const EMAILJS_SERVICE_ID = 'service_hyudouh';
+const EMAILJS_TEMPLATE_ID = 'template_ec25lfd';
+const EMAILJS_PUBLIC_KEY = 'x79I4B5lifhvNyXSY';
+
+// Hardcoded admin emails for anonymous user notifications
+const ADMIN_EMAILS = [
+  'shng2025@gmail.com',
+  'asiansticker6969@gmail.com', 
+  'soonlee.ng@noscoasia.com'
+];
 
 export const sendSupportInquiry = async (inquiryData) => {
   try {
     // Check if user is authenticated
     const currentUser = auth.currentUser;
-    if (!currentUser) {
-      throw new Error("You must be logged in to send feedback");
+    let feedbackData;
+    
+    if (currentUser) {
+      // Authenticated user feedback
+      feedbackData = {
+        subject: inquiryData.subject,
+        message: inquiryData.message,
+        userID: currentUser.uid,
+        email: currentUser.email, // Store email for reference
+        name: currentUser.displayName || 'User',
+        phone: inquiryData.phone || '',
+        createdAt: new Date(),
+        status: 'New',
+        updatedAt: new Date(),
+        anonymous: false
+      };
+    } else {
+      // Anonymous user feedback
+      if (!inquiryData.email) {
+        throw new Error("Email is required for feedback");
+      }
+      
+      feedbackData = {
+        subject: inquiryData.subject,
+        message: inquiryData.message,
+        name: inquiryData.name || 'Anonymous',
+        email: inquiryData.email,
+        phone: inquiryData.phone || '',
+        createdAt: new Date(),
+        status: 'New',
+        updatedAt: new Date(),
+        anonymous: true // Critical field for anonymous submissions
+      };
     }
     
-    // Check for rate limiting (e.g., max 5 feedback submissions per day)
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    const feedbackQuery = query(
-      collection(db, "feedback"),
-      where("userID", "==", currentUser.uid),
-      where("createdAt", ">=", yesterday)
-    );
-    
-    const feedbackSnapshot = await getDocs(feedbackQuery);
-    if (feedbackSnapshot.size >= 5) {
-      throw new Error("You've reached the maximum number of feedback submissions for today");
-    }
-    
-    // Add the feedback
-    const docRef = await addDoc(collection(db, "feedback"), {
-      subject: inquiryData.subject,
-      message: inquiryData.message,
-      userID: currentUser.uid,
-      createdAt: new Date(),
-      status: 'New',
-      updatedAt: new Date()
-    });
-    
+    // Add the feedback document
+    const docRef = await addDoc(collection(db, "feedback"), feedbackData);
     console.log("Feedback sent with ID: ", docRef.id);
     
-    // Find all admin emails for notification
+    // Notify admins via email
     try {
-      const adminQuery = query(collection(db, "users"), where("role", "==", "admin"));
-      const adminSnapshot = await getDocs(adminQuery);
-      const adminEmails = adminSnapshot.docs.map(doc => doc.data().email).filter(email => email);
+      let adminEmails = [];
+      
+      // For authenticated users, try to get admin emails from the database
+      if (currentUser) {
+        try {
+          const adminQuery = query(collection(db, "users"), where("role", "==", "admin"));
+          const adminSnapshot = await getDocs(adminQuery);
+          adminEmails = adminSnapshot.docs.map(doc => doc.data().email).filter(email => email);
+        } catch (error) {
+          console.log("Could not query admin emails, falling back to hardcoded emails", error);
+          adminEmails = ADMIN_EMAILS;
+        }
+      } else {
+        // For anonymous users, use hardcoded admin emails
+        adminEmails = ADMIN_EMAILS;
+      }
       
       if (adminEmails.length > 0) {
-        // Format emails for EmailJS template
         const adminEmailsStr = adminEmails.join(', ');
         
         // Setup EmailJS parameters
         const templateParams = {
           to_email: adminEmailsStr,
-          from_name: currentUser.displayName || 'User',
-          from_email: currentUser.email,
-          subject: inquiryData.subject,
-          message: inquiryData.message,
-          feedback_id: docRef.id
+          from_name: feedbackData.name,
+          from_email: feedbackData.email,
+          subject: feedbackData.subject,
+          message: feedbackData.message,
+          feedback_id: docRef.id,
+          phone: feedbackData.phone || 'Not provided'
         };
         
         // Send email via EmailJS

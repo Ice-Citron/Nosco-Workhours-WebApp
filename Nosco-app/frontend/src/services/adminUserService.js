@@ -240,4 +240,67 @@ export const adminUserService = {
       throw error;
     }
   },
+
+  // Update worker details
+  updateWorkerDetails: async (workerId, workerData) => {
+    try {
+      const userRef = doc(firestore, 'users', workerId);
+      
+      // Get the current worker document
+      const workerDoc = await getDoc(userRef);
+      if (!workerDoc.exists()) {
+        throw new Error('Worker not found');
+      }
+      
+      // Prepare the data to update
+      const updateData = {
+        name: workerData.name,
+        email: workerData.email,
+        department: workerData.department,
+        position: workerData.position,
+        updatedAt: Timestamp.now()
+      };
+      
+      // Handle compensation data if it's part of the form
+      if (workerData.baseRate !== undefined || 
+          workerData.otRate15 !== undefined ||
+          workerData.otRate20 !== undefined ||
+          workerData.currency !== undefined) {
+        
+        // Get the existing compensation object or create a new one
+        const currentCompensation = workerDoc.data().compensation || {};
+        
+        updateData.compensation = {
+          ...currentCompensation,
+          baseRate: workerData.baseRate !== undefined 
+            ? parseFloat(workerData.baseRate) 
+            : currentCompensation.baseRate || 0,
+          otRate15: workerData.otRate15 !== undefined 
+            ? parseFloat(workerData.otRate15) 
+            : currentCompensation.otRate15 || 0,
+          otRate20: workerData.otRate20 !== undefined 
+            ? parseFloat(workerData.otRate20) 
+            : currentCompensation.otRate20 || 0,
+          currency: workerData.currency || currentCompensation.currency || 'USD'
+        };
+      }
+      
+      // Handle bank account data if it's part of the form
+      if (workerData.bankAccounts) {
+        updateData.bankAccounts = workerData.bankAccounts;
+      }
+      
+      // Update the document
+      await updateDoc(userRef, updateData);
+      
+      return {
+        id: workerId,
+        ...workerDoc.data(),
+        ...updateData
+      };
+    } catch (error) {
+      console.error('Error updating worker details:', error);
+      throw error;
+    }
+  },
 };

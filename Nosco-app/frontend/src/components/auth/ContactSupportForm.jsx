@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { sendSupportInquiry } from '../../services/supportService';
+import { getAuth } from 'firebase/auth';
 import Button from '../common/Button';
 import InputField from '../common/InputField';
 import Notification from '../common/Notification';
 
 const ContactSupportForm = () => {
+  const auth = getAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -16,6 +18,18 @@ const ContactSupportForm = () => {
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
   const navigate = useNavigate();
+  
+  // Pre-fill form with user data if logged in
+  useEffect(() => {
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      setFormData(prev => ({
+        ...prev,
+        name: currentUser.displayName || '',
+        email: currentUser.email || ''
+      }));
+    }
+  }, [auth]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -25,19 +39,37 @@ const ContactSupportForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    
     try {
-      await sendSupportInquiry({
-        subject: formData.subject,
-        message: formData.message
-        // No need to pass name, email, phone as those will be taken from the current user
+      // Pass all form data to support service
+      await sendSupportInquiry(formData);
+      
+      setNotification({ 
+        type: 'success', 
+        message: 'Your feedback has been sent successfully.' 
       });
-      setNotification({ type: 'success', message: 'Your feedback has been sent successfully.' });
+      
+      // Reset form
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        subject: '',
+        message: ''
+      });
+      
       setTimeout(() => navigate('/'), 3000); // Redirect to home after 3 seconds
     } catch (error) {
-      setNotification({ type: 'error', message: error.message || 'Failed to send feedback. Please try again.' });
+      setNotification({ 
+        type: 'error', 
+        message: error.message || 'Failed to send feedback. Please try again.' 
+      });
     }
+    
     setLoading(false);
   };
+
+  const isUserLoggedIn = !!auth.currentUser;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -47,6 +79,7 @@ const ContactSupportForm = () => {
         value={formData.name}
         onChange={handleChange}
         required
+        disabled={isUserLoggedIn}
       />
       <InputField
         label="Email Address"
@@ -55,6 +88,7 @@ const ContactSupportForm = () => {
         value={formData.email}
         onChange={handleChange}
         required
+        disabled={isUserLoggedIn}
       />
       <InputField
         label="Phone Number (optional)"
